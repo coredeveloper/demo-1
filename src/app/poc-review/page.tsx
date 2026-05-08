@@ -10,9 +10,19 @@ import type { Survey } from "@/lib/types";
 
 const PENDING = SURVEYS_BY_DATE_DESC.filter((s) => s.pocStatus !== "POC submitted");
 
+type Decision = "pending" | "accepted" | "rejected";
+
 export default function PocReviewPage() {
   const [selectedId, setSelectedId] = useState<string>(PENDING[0]?.id ?? "");
+  // Decisions persist across survey switches in the same session.
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const selected = PENDING.find((s) => s.id === selectedId);
+
+  function setDecision(surveyId: string, d: Decision) {
+    setDecisions((prev) => ({ ...prev, [surveyId]: d }));
+  }
+
+  const decidedCount = Object.values(decisions).filter((d) => d !== "pending").length;
 
   return (
     <div className="px-10 pt-6 pb-16 max-w-[1500px]">
@@ -29,7 +39,12 @@ export default function PocReviewPage() {
           <header className="px-5 py-4 border-b border-ph-gray-200 flex items-baseline justify-between">
             <div>
               <h3 className="text-base tracking-tight">Pending review</h3>
-              <p className="text-[11px] text-ph-gray-500 mt-0.5">{PENDING.length} drafts</p>
+              <p className="text-[11px] text-ph-gray-500 mt-0.5">
+                {PENDING.length} drafts
+                {decidedCount > 0 && (
+                  <span className="text-ph-primary"> · {decidedCount} decided this session</span>
+                )}
+              </p>
             </div>
           </header>
           <ul className="divide-y divide-ph-gray-200 max-h-[700px] overflow-y-auto">
@@ -38,6 +53,7 @@ export default function PocReviewPage() {
                 key={s.id}
                 survey={s}
                 selected={s.id === selectedId}
+                decision={decisions[s.id] ?? "pending"}
                 onSelect={() => setSelectedId(s.id)}
               />
             ))}
@@ -45,7 +61,15 @@ export default function PocReviewPage() {
         </aside>
 
         <section className="col-span-12 md:col-span-8">
-          {selected ? <PocDetail survey={selected} /> : <EmptyState />}
+          {selected ? (
+            <PocDetail
+              survey={selected}
+              decision={decisions[selected.id] ?? "pending"}
+              setDecision={(d) => setDecision(selected.id, d)}
+            />
+          ) : (
+            <EmptyState />
+          )}
         </section>
       </div>
     </div>
@@ -55,10 +79,12 @@ export default function PocReviewPage() {
 function PocListItem({
   survey,
   selected,
+  decision,
   onSelect,
 }: {
   survey: Survey;
   selected: boolean;
+  decision: Decision;
   onSelect: () => void;
 }) {
   const facility = getFacility(survey.facilityId)!;
@@ -74,7 +100,13 @@ function PocListItem({
         )}
       >
         <div className="flex items-baseline justify-between mb-1">
-          <span className="font-display text-sm tracking-tight">
+          <span className="font-display text-sm tracking-tight inline-flex items-center gap-1.5">
+            {decision === "accepted" && (
+              <Check className="h-3 w-3 text-ph-primary" strokeWidth={2.5} aria-label="Accepted" />
+            )}
+            {decision === "rejected" && (
+              <X className="h-3 w-3 text-ph-burgundy" strokeWidth={2.5} aria-label="Rejected" />
+            )}
             {facility.name.replace("Pruitthealth ", "")}
           </span>
           <span
@@ -101,9 +133,16 @@ function PocListItem({
   );
 }
 
-function PocDetail({ survey }: { survey: Survey }) {
+function PocDetail({
+  survey,
+  decision,
+  setDecision,
+}: {
+  survey: Survey;
+  decision: Decision;
+  setDecision: (d: Decision) => void;
+}) {
   const facility = getFacility(survey.facilityId)!;
-  const [decision, setDecision] = useState<"pending" | "accepted" | "rejected">("pending");
   return (
     <div className="space-y-6">
       {/* Header card */}

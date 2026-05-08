@@ -6,6 +6,7 @@ import { PipelineStepper, type Step } from "@/components/pipeline/pipeline-stepp
 import { FhirTreeView } from "@/components/fhir/fhir-tree-view";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
 import { SURVEYS, getFacility, getFtag, CONFIDENCE_BY_FTAG } from "@/lib/mock-data";
+import { passagesFor, passageLabel } from "@/lib/mock-narratives";
 import { buildBundle } from "@/lib/mock-fhir";
 import { downloadPoc } from "@/lib/word-export";
 import { cn, formatDate } from "@/lib/utils";
@@ -283,6 +284,7 @@ function Step2Reason({ delay, survey }: { delay: number; survey: Survey }) {
       <div className="px-6 py-5 grid grid-cols-12 gap-6">
         {survey.deficiencies.map((d, i) => {
           const t = getFtag(d.ftag);
+          const passages = passagesFor(d.ftag);
           return (
             <div
               key={`${d.ftag}-${i}`}
@@ -295,10 +297,15 @@ function Step2Reason({ delay, survey }: { delay: number; survey: Survey }) {
               </div>
               <div className="text-[11px] text-ph-gray-700 mb-3 leading-relaxed">{t?.title}</div>
               <div className="ph-eyebrow text-ph-gray-400 mb-1">Narrative passages</div>
-              <ul className="text-[11px] text-ph-gray-500 leading-relaxed space-y-1">
-                <li>· observation — {d.narrative.slice(0, 80)}…</li>
-                <li>· record-review — chart-based corroboration extracted</li>
-                <li>· interview — staff response captured</li>
+              <ul className="text-[11px] text-ph-gray-500 leading-relaxed space-y-1.5">
+                {passages.map((p, j) => (
+                  <li key={j} className="flex gap-1.5">
+                    <span className="font-mono text-[10px] text-ph-burgundy shrink-0 mt-0.5">
+                      {passageLabel(p.type)}
+                    </span>
+                    <span className="text-ph-gray-700">{p.text}</span>
+                  </li>
+                ))}
               </ul>
             </div>
           );

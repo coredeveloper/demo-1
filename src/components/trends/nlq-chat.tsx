@@ -73,7 +73,7 @@ export function NlqChat() {
   }
 
   return (
-    <div className="ph-card overflow-hidden flex flex-col h-[560px]">
+    <div className="ph-card overflow-hidden flex flex-col min-h-[480px] h-full max-h-[720px]">
       <header className="px-5 py-4 border-b border-ph-gray-200 shrink-0">
         <div className="ph-eyebrow text-ph-burgundy">Natural language</div>
         <h3 className="text-lg tracking-tight">Ask the corpus</h3>

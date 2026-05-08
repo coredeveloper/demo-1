@@ -15,11 +15,11 @@ export default function Home() {
         <div className="grid grid-cols-12 gap-8 items-end">
           <div className="col-span-12 md:col-span-7">
             <div className="ph-eyebrow mb-3">Compliance suite · State Survey + POC</div>
-            <p className="text-[28px] leading-[1.18] tracking-tight text-ph-ink font-display">
+            <h2 className="text-[28px] leading-[1.18] tracking-tight text-ph-ink font-display font-medium">
               Every CMS-2567 becomes a FHIR-native record on arrival,
               <span className="text-ph-burgundy"> drafts its own Plan of Correction</span>,
               and surfaces the trend before a region asks.
-            </p>
+            </h2>
           </div>
           <div className="col-span-12 md:col-span-4 md:col-start-9">
             <hr className="ph-rule mb-4" />

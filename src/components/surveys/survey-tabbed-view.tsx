@@ -196,11 +196,32 @@ function PdfPanel({ survey, facility }: { survey: Survey; facility: Facility }) 
           Open in new tab ↗
         </a>
       </div>
-      <iframe
-        src={survey.pdfPath}
-        title={`CMS-2567 — ${facility.name}`}
-        className="w-full h-[820px] bg-ph-gray-100"
-      />
+      {/* `<object>` lets the browser render the PDF natively AND shows the
+          fallback children if the browser blocks inline PDF rendering
+          (Chrome corporate policy, mobile Safari, etc). */}
+      <object
+        data={survey.pdfPath}
+        type="application/pdf"
+        className="block w-full h-[820px] bg-ph-gray-100"
+        aria-label={`CMS-2567 — ${facility.name}`}
+      >
+        <div className="p-12 text-center">
+          <FileType2 className="h-10 w-10 text-ph-gray-400 mx-auto mb-4" strokeWidth={1.4} />
+          <h3 className="text-base tracking-tight mb-2">Inline PDF blocked by your browser</h3>
+          <p className="text-sm text-ph-gray-500 mb-4 max-w-md mx-auto">
+            Some browsers (and corporate Chrome profiles) block inline PDF embedding. The source
+            document is still available below.
+          </p>
+          <a
+            href={survey.pdfPath}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ph-primary text-ph-primary px-4 py-2 text-xs font-medium hover:bg-ph-primary-soft transition-colors"
+          >
+            Open CMS-2567 in new tab ↗
+          </a>
+        </div>
+      </object>
     </div>
   );
 }
