@@ -138,7 +138,7 @@ export default function TrendsPage() {
                 return (
                   <li key={s} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className={cn("h-2.5 w-2.5 rounded-sm", SEV_COLORS[s])} />
+                      <span className={cn("h-2.5 w-3", SEV_COLORS[s])} />
                       <span className="text-ph-gray-700">{s}</span>
                     </div>
                     <span className="font-mono text-ph-gray-500">

@@ -12,7 +12,7 @@ export function KpiCard({ eyebrow, value, caption, emphasis = "neutral", delay =
   return (
     <div
       className={cn(
-        "ph-card p-6 ph-reveal flex flex-col gap-2",
+        "ph-card p-6 ph-reveal flex flex-col gap-2 transition-shadow hover:shadow-[var(--shadow-card-hover)]",
         emphasis === "critical" && "border-ph-burgundy/20 bg-ph-burgundy-soft/40",
         emphasis === "warning" && "border-ph-amber/30",
       )}

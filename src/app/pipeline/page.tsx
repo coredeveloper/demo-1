@@ -9,6 +9,7 @@ import { SURVEYS, getFacility, getFtag, CONFIDENCE_BY_FTAG } from "@/lib/mock-da
 import { passagesFor, passageLabel } from "@/lib/mock-narratives";
 import { buildBundle } from "@/lib/mock-fhir";
 import { downloadPoc } from "@/lib/word-export";
+import { CanopyOrnament } from "@/components/decorative/canopy";
 import { cn, formatDate } from "@/lib/utils";
 import type { Survey, Facility } from "@/lib/types";
 import type { FhirBundle } from "@/lib/mock-fhir";
@@ -181,10 +182,11 @@ function SurveyPicker({
 
 function IdleState() {
   return (
-    <div className="ph-card p-12 text-center">
-      <FileText className="h-10 w-10 text-ph-gray-400 mx-auto mb-4" strokeWidth={1.4} />
-      <h3 className="text-xl mb-2 tracking-tight">Ready to ingest</h3>
-      <p className="text-sm text-ph-gray-500 max-w-md mx-auto leading-relaxed">
+    <div className="ph-card p-12 text-center relative overflow-hidden">
+      <CanopyOrnament className="absolute -top-6 -right-8 h-44 w-44 text-ph-primary opacity-[0.06] pointer-events-none" />
+      <FileText className="h-10 w-10 text-ph-gray-400 mx-auto mb-4 relative z-10" strokeWidth={1.4} />
+      <h3 className="text-xl mb-2 tracking-tight relative z-10">Ready to ingest</h3>
+      <p className="text-sm text-ph-gray-500 max-w-md mx-auto leading-relaxed relative z-10">
         Press <span className="text-ph-ink font-medium">Run pipeline</span> to walk through a real
         PruittHealth CMS-2567 survey end-to-end — extraction, reasoning, FHIR persistence, and
         AI-drafted Plan-of-Correction.

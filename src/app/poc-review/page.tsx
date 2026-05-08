@@ -6,6 +6,7 @@ import { SURVEYS_BY_DATE_DESC, getFacility, getFtag } from "@/lib/mock-data";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
 import { formatDate, daysUntil, cn } from "@/lib/utils";
 import { downloadPoc } from "@/lib/word-export";
+import { CanopyOrnament } from "@/components/decorative/canopy";
 import type { Survey } from "@/lib/types";
 
 const PENDING = SURVEYS_BY_DATE_DESC.filter((s) => s.pocStatus !== "POC submitted");
@@ -239,10 +240,11 @@ function PocDetail({
 
 function EmptyState() {
   return (
-    <div className="ph-card p-12 text-center">
-      <FileText className="h-10 w-10 text-ph-gray-400 mx-auto mb-4" strokeWidth={1.4} />
-      <h3 className="text-lg mb-2 tracking-tight">No drafts pending review</h3>
-      <p className="text-sm text-ph-gray-500">All POCs are submitted.</p>
+    <div className="ph-card p-12 text-center relative overflow-hidden">
+      <CanopyOrnament className="absolute -top-8 -right-10 h-48 w-48 text-ph-primary opacity-[0.06] pointer-events-none" />
+      <FileText className="h-10 w-10 text-ph-gray-400 mx-auto mb-4 relative z-10" strokeWidth={1.4} />
+      <h3 className="text-lg mb-2 tracking-tight relative z-10">No drafts pending review</h3>
+      <p className="text-sm text-ph-gray-500 relative z-10">All POCs are submitted.</p>
     </div>
   );
 }

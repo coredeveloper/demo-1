@@ -3,6 +3,7 @@ import { Public_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { DemoBanner } from "@/components/layout/demo-banner";
+import { PageFooter } from "@/components/layout/page-footer";
 import "./globals.css";
 
 const publicSans = Public_Sans({
@@ -50,6 +51,7 @@ export default function RootLayout({
           <div className="flex flex-col">
             <Header />
             <main className="flex-1">{children}</main>
+            <PageFooter />
           </div>
         </div>
       </body>

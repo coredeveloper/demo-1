@@ -10,9 +10,9 @@ export default function Home() {
 
   return (
     <div className="px-10 pt-8 pb-16 max-w-[1500px]">
-      {/* Editorial pull-quote / context strip */}
-      <section className="mb-10 ph-reveal">
-        <div className="grid grid-cols-12 gap-8 items-end">
+      {/* Editorial pull-quote / context strip — paper-grain texture for atmosphere */}
+      <section className="mb-10 ph-reveal ph-grain rounded-lg p-1 -m-1">
+        <div className="grid grid-cols-12 gap-8 items-end relative z-10">
           <div className="col-span-12 md:col-span-7">
             <div className="ph-eyebrow mb-3">Compliance suite · State Survey + POC</div>
             <h2 className="text-[28px] leading-[1.18] tracking-tight text-ph-ink font-display font-medium">
@@ -88,13 +88,6 @@ export default function Home() {
         </div>
       </section>
 
-      <p className="mt-12 text-[11px] text-ph-gray-400 italic max-w-2xl leading-relaxed">
-        Local prototype — mock data, no Azure. Modeled after the production architecture in
-        <code className="not-italic font-mono text-[10px] mx-1 px-1 py-0.5 rounded bg-ph-gray-100">
-          architecture/proposed/02-state-survey-poc.md
-        </code>
-        and rendered in the Next.js shell that the Azure-wired implementation will inherit.
-      </p>
     </div>
   );
 }
