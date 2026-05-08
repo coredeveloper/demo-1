@@ -1,5 +1,7 @@
 # PruittHealth — State Survey Automation · Local Prototype
 
+> **Repo:** https://github.com/coredeveloper/demo-1
+
 Local-only Next.js prototype for **RFP Objective 2 — State Survey & Plan-of-Correction Automation**. Mock data, no Azure, no real LLM calls. Mirrors the production architecture spec in `architecture/proposed/02-state-survey-poc.md` (kept in the project's Google Drive folder) so the same UI shells will be re-used by the Azure-wired implementation that follows.
 
 ## Quickstart
