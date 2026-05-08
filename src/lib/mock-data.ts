@@ -141,7 +141,12 @@ const NARRATIVES = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Survey generator — produces 30 surveys deterministically across 12 months
+// Survey generator — produces 30 surveys deterministically.
+// Distribution (post-Pass-1 audit rebalance):
+//   • 25 historical surveys distributed across the last 12 months
+//   • 5 RECENT surveys clustered in the last 30 days, biased toward
+//     "draft pending review" so the dashboard KPIs read alive:
+//        Open surveys ≥ 6 · POCs due ≤7d (or overdue) ≥ 2 · IJ ≥ 1
 // ─────────────────────────────────────────────────────────────────────────────
 const FTAG_WEIGHTS: { value: string; weight: number }[] = [
   { value: "F0677", weight: 25 },
@@ -159,6 +164,27 @@ const FTAG_WEIGHTS: { value: string; weight: number }[] = [
   { value: "F0693", weight: 1 },
   { value: "F0684", weight: 1 },
 ];
+
+// Pre-computed Document Intelligence-style confidence scores per F-tag.
+// Used by the pipeline page Step 1 panel so values are deterministic
+// and don't shift on every render (no Math.random() in JSX).
+export const CONFIDENCE_BY_FTAG: Record<string, number> = {
+  F0677: 0.987,
+  F0689: 0.974,
+  F0686: 0.962,
+  F0656: 0.953,
+  F0584: 0.978,
+  F0880: 0.991,
+  F0812: 0.969,
+  F0658: 0.946,
+  F0641: 0.957,
+  F0636: 0.964,
+  F0697: 0.972,
+  F0759: 0.985,
+  F0693: 0.951,
+  F0684: 0.948,
+  F0550: 0.967,
+};
 
 const SEVERITY_WEIGHTS: { value: Severity; weight: number }[] = [
   { value: "Minimal harm or potential for actual harm", weight: 60 },
@@ -192,15 +218,28 @@ const SEVERITY_RANK: Record<Severity, number> = {
   "No actual harm with potential for minimal harm": 1,
 };
 
-function buildSurvey(seed: number, idx: number): Survey {
+type BuildOpts = {
+  /** Days before today; if undefined, uses the historical 12-month spread. */
+  daysBack?: number;
+  /** Force the highest-severity deficiency to a specific tier (e.g. "Immediate jeopardy"). */
+  forceWorstSeverity?: Severity;
+  /** Bias the POC status weights toward "draft pending review" so the dashboard reads alive. */
+  biasOpen?: boolean;
+};
+
+function buildSurvey(seed: number, idx: number, opts: BuildOpts = {}): Survey {
   const rand = rng(seed);
   const facility = FACILITIES[idx % FACILITIES.length]!;
-  // Spread across last 12 months, oldest first
-  const monthsBack = 12 - Math.floor(idx / 3);
-  const dayOfMonth = Math.floor(rand() * 28) + 1;
   const surveyDate = new Date();
-  surveyDate.setMonth(surveyDate.getMonth() - monthsBack);
-  surveyDate.setDate(dayOfMonth);
+  if (opts.daysBack !== undefined) {
+    surveyDate.setDate(surveyDate.getDate() - opts.daysBack);
+  } else {
+    // Historical spread across the past 12 months
+    const monthsBack = 12 - Math.floor(idx / 3);
+    const dayOfMonth = Math.floor(rand() * 28) + 1;
+    surveyDate.setMonth(surveyDate.getMonth() - monthsBack);
+    surveyDate.setDate(dayOfMonth);
+  }
   surveyDate.setHours(0, 0, 0, 0);
 
   const surveyType = rand() < 0.85 ? "health-inspection" : "complaint-inspection";
@@ -223,15 +262,30 @@ function buildSurvey(seed: number, idx: number): Survey {
     deficiencies.push({ ftag, severity, residentsAffected, narrative });
   }
 
+  // If caller wants to guarantee a specific severity tier, promote the first
+  // deficiency. (Used to ensure ≥1 Immediate Jeopardy in the recent batch.)
+  if (opts.forceWorstSeverity && deficiencies[0]) {
+    deficiencies[0].severity = opts.forceWorstSeverity;
+  }
+
   // Worst severity = highest-rank
   const worstSeverity = deficiencies.reduce<Severity>(
     (worst, d) => (SEVERITY_RANK[d.severity] > SEVERITY_RANK[worst] ? d.severity : worst),
     deficiencies[0]!.severity,
   );
 
-  const pocStatus = pickWeighted(rand, STATUS_WEIGHTS);
+  // Recent surveys: bias toward "draft pending review" so they show up
+  // as urgent on the dashboard.
+  const statusWeights = opts.biasOpen
+    ? ([
+        { value: "POC submitted", weight: 10 },
+        { value: "draft pending review", weight: 75 },
+        { value: "in extraction", weight: 15 },
+      ] as { value: PocStatus; weight: number }[])
+    : STATUS_WEIGHTS;
+  const pocStatus = pickWeighted(rand, statusWeights);
   const pocDueDate = new Date(surveyDate.getTime() + 10 * 86_400_000); // 10-day window
-  const id = `survey-${facility.id}-${monthsBack}-${idx}`;
+  const id = `survey-${facility.id}-${idx}-${Math.floor(surveyDate.getTime() / 86_400_000)}`;
 
   const pocActivities = mockPocActivities(deficiencies, rand);
 
@@ -251,16 +305,56 @@ function buildSurvey(seed: number, idx: number): Survey {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Public exports — generated once at module load (deterministic)
+// Public exports — generated once at module load (deterministic).
+//
+// Distribution after Pass-1 audit rebalance:
+//   • 25 historical surveys spread across last 12 months (mostly POC submitted)
+//   • 5 recent surveys clustered in the last 30 days, biased open, with one
+//     forced Immediate Jeopardy so the IJ KPI reads non-zero.
+// Recent days back: 2, 4, 9, 14, 21 — yielding 2 POCs due ≤7 days from today
+// (4d → due+6, 9d → due+1) plus an overdue one (14d → due-4) for variety.
 // ─────────────────────────────────────────────────────────────────────────────
-const _surveys: Survey[] = Array.from({ length: 30 }, (_, i) => buildSurvey(2026_05_08 + i * 7, i));
+const SEED_BASE = 2026_05_09;
 
-// Attach the real CMS-2567 sample PDFs we ship to the most-recent survey at
-// each facility that has one, so the PDF viewer tab shows actual source
-// material on at least one record. Synthetic surveys keep pdfPath = null and
-// surface a "synthetic placeholder" card in the UI.
-const flemingFirst = _surveys.find((s) => s.facilityId === "fleming-island");
-if (flemingFirst) flemingFirst.pdfPath = "/samples/fleming-island-f0677.pdf";
+const _historical: Survey[] = Array.from({ length: 25 }, (_, i) =>
+  buildSurvey(SEED_BASE + i * 7, i),
+);
+
+const RECENT_PROFILES = [
+  { daysBack: 2,  biasOpen: true,  forceWorstSeverity: undefined },
+  { daysBack: 4,  biasOpen: true,  forceWorstSeverity: undefined },
+  { daysBack: 9,  biasOpen: true,  forceWorstSeverity: "Immediate jeopardy" as Severity },
+  { daysBack: 14, biasOpen: true,  forceWorstSeverity: undefined },
+  { daysBack: 21, biasOpen: true,  forceWorstSeverity: undefined },
+];
+
+const _recent: Survey[] = RECENT_PROFILES.map((p, i) =>
+  buildSurvey(SEED_BASE + (25 + i) * 7, 25 + i, p),
+);
+
+const _surveys: Survey[] = [..._historical, ..._recent];
+
+// Attach the real CMS-2567 sample PDFs we ship so the PDF viewer tab shows
+// actual source material on multiple records (and the pipeline survey-picker
+// has more than one option). Both PDFs are real CMS-2567s; we attach
+// Fleming-Island.pdf to the latest Fleming Island survey (its native match)
+// and Arabella.pdf to a different recent survey (same form layout, different
+// facility — illustrative for demo purposes).
+const recentFleming = _recent.find((s) => s.facilityId === "fleming-island");
+if (recentFleming) {
+  recentFleming.pdfPath = "/samples/fleming-island-f0677.pdf";
+} else {
+  const anyFleming = _surveys.find((s) => s.facilityId === "fleming-island");
+  if (anyFleming) anyFleming.pdfPath = "/samples/fleming-island-f0677.pdf";
+}
+
+const recentLafayette = _recent.find((s) => s.facilityId === "lafayette");
+if (recentLafayette) {
+  recentLafayette.pdfPath = "/samples/arabella-grand-bay.pdf";
+} else {
+  const anyLafayette = _surveys.find((s) => s.facilityId === "lafayette");
+  if (anyLafayette) anyLafayette.pdfPath = "/samples/arabella-grand-bay.pdf";
+}
 
 export const SURVEYS: Survey[] = _surveys;
 
@@ -320,12 +414,21 @@ export function ftagFrequency(): Map<string, number> {
   return m;
 }
 
-export function dashboardKpis() {
+/**
+ * Dashboard KPIs.
+ *
+ * NOTE: takes a `now` parameter so the caller can compute against a stable
+ * client-side timestamp. Without this, calling Date.now() inside an SSR
+ * render path produces hydration mismatches (server timestamp ≠ client
+ * timestamp). Pages that need these values use a small client wrapper.
+ */
+export function dashboardKpis(now: number = Date.now()) {
   const open = SURVEYS.filter((s) => s.pocStatus !== "POC submitted").length;
-  const dueSoon = SURVEYS.filter((s) => {
+  // "Urgent" = due within 7 days, OR already overdue and not yet submitted.
+  const urgent = SURVEYS.filter((s) => {
     if (s.pocStatus === "POC submitted") return false;
-    const days = (new Date(s.pocDueDate).getTime() - Date.now()) / 86_400_000;
-    return days <= 7 && days >= 0;
+    const days = (new Date(s.pocDueDate).getTime() - now) / 86_400_000;
+    return days <= 7;
   }).length;
   const totalDeficiencies = SURVEYS.reduce((acc, s) => acc + s.deficiencies.length, 0);
   const ijCount = SURVEYS.reduce(
@@ -334,7 +437,7 @@ export function dashboardKpis() {
   );
   return {
     openSurveys: open,
-    dueThisWeek: dueSoon,
+    dueThisWeek: urgent,
     totalDeficiencies,
     immediateJeopardy: ijCount,
   };

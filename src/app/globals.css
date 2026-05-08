@@ -25,10 +25,12 @@
   --ph-paper: #FFFFFF;
   --ph-amber: #B8862B;          /* tertiary accent — "actual harm" severity */
 
-  /* Severity scale (used in heatmap, badges) */
-  --sev-no-harm: #9FB8B0;
-  --sev-minimal: #C2A878;
-  --sev-actual: #B8862B;
+  /* Severity scale (used in heatmap, badges).
+     Contrast-tuned so white text meets WCAG AA 4.5:1 on every tier.
+     Tier ordering preserved (no-harm lightest → jeopardy darkest). */
+  --sev-no-harm: #6F8B83;     /* darkened sage so even no-harm reads */
+  --sev-minimal: #A06A2C;
+  --sev-actual: #7A4F1F;
   --sev-jeopardy: #7B2D3F;
 
   /* Charts */

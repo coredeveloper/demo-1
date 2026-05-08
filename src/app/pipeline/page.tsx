@@ -1,27 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { Play, RotateCcw, FileText, Download } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Play, RotateCcw, FileText, Download, ChevronDown } from "lucide-react";
 import { PipelineStepper, type Step } from "@/components/pipeline/pipeline-stepper";
 import { FhirTreeView } from "@/components/fhir/fhir-tree-view";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
-import { SURVEYS, getFacility, getFtag } from "@/lib/mock-data";
+import { SURVEYS, getFacility, getFtag, CONFIDENCE_BY_FTAG } from "@/lib/mock-data";
 import { buildBundle } from "@/lib/mock-fhir";
 import { downloadPoc } from "@/lib/word-export";
 import { cn, formatDate } from "@/lib/utils";
+import type { Survey, Facility } from "@/lib/types";
+import type { FhirBundle } from "@/lib/mock-fhir";
 
-const DEMO_SURVEY = SURVEYS.find((s) => s.facilityId === "fleming-island")!;
-const DEMO_FACILITY = getFacility(DEMO_SURVEY.facilityId)!;
-const DEMO_BUNDLE = buildBundle(DEMO_SURVEY);
+// Surveys with a real source PDF — these are the only ones the pipeline
+// "ingestion" can plausibly run against. The picker exposes them.
+const PIPELINE_OPTIONS = SURVEYS.filter((s) => s.pdfPath !== null);
 
 const STEP_LABELS: Pick<Step, "num" | "label" | "description">[] = [
-  { num: 1, label: "Extract", description: "Document Intelligence — layout + fields" },
+  { num: 1, label: "Extract", description: "Document Intelligence — custom CMS-2567 model" },
   { num: 2, label: "Reason", description: "Content Understanding — canonicalize" },
   { num: 3, label: "FHIR", description: "Bundle into AHDS R4 resources" },
   { num: 4, label: "Draft POC", description: "Foundry agent — RAG + cite" },
 ];
 
 export default function PipelinePage() {
+  const [surveyId, setSurveyId] = useState<string>(
+    PIPELINE_OPTIONS.find((s) => s.facilityId === "fleming-island")?.id ??
+      PIPELINE_OPTIONS[0]?.id ??
+      SURVEYS[0]!.id,
+  );
+  const survey = useMemo(() => SURVEYS.find((s) => s.id === surveyId)!, [surveyId]);
+  const facility = useMemo(() => getFacility(survey.facilityId)!, [survey]);
+  const bundle = useMemo<FhirBundle>(() => buildBundle(survey), [survey]);
+
   const [phase, setPhase] = useState<0 | 1 | 2 | 3 | 4 | 5>(0);
   // 0 = idle, 1 = extracting, 2 = reasoning, 3 = building FHIR, 4 = drafting POC, 5 = done
 
@@ -34,6 +45,11 @@ export default function PipelinePage() {
   }
 
   function reset() {
+    setPhase(0);
+  }
+
+  function pickSurvey(id: string) {
+    setSurveyId(id);
     setPhase(0);
   }
 
@@ -58,14 +74,22 @@ export default function PipelinePage() {
         <div>
           <div className="ph-eyebrow text-ph-burgundy mb-1">Live demo</div>
           <h2 className="text-2xl tracking-tight">
-            {DEMO_FACILITY.name} — {formatDate(DEMO_SURVEY.surveyDate)}
+            {facility.name} — {formatDate(survey.surveyDate)}
           </h2>
           <p className="text-sm text-ph-gray-500 mt-1 max-w-3xl">
             Mock progression. In production: Document Intelligence + Content Understanding +
             FHIR Converter (Liquid templates) + Azure Health Data Services + Microsoft Foundry agent.
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Survey picker */}
+          {PIPELINE_OPTIONS.length > 1 && phase === 0 && (
+            <SurveyPicker
+              options={PIPELINE_OPTIONS}
+              value={surveyId}
+              onChange={pickSurvey}
+            />
+          )}
           {phase === 0 && (
             <button
               type="button"
@@ -106,12 +130,50 @@ export default function PipelinePage() {
         <IdleState />
       ) : (
         <div className="space-y-6">
-          {phase >= 1 && <Step1Extract delay={0} />}
-          {phase >= 2 && <Step2Reason delay={300} />}
-          {phase >= 3 && <Step3Fhir delay={300} />}
-          {phase >= 4 && <Step4Poc delay={300} done={phase === 5} />}
+          {phase >= 1 && <Step1Extract delay={0} survey={survey} facility={facility} />}
+          {phase >= 2 && <Step2Reason delay={300} survey={survey} />}
+          {phase >= 3 && <Step3Fhir delay={300} bundle={bundle} />}
+          {phase >= 4 && (
+            <Step4Poc
+              delay={300}
+              done={phase === 5}
+              survey={survey}
+              facility={facility}
+            />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SurveyPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: Survey[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none cursor-pointer rounded-lg border border-ph-gray-200 bg-ph-paper px-3 py-2.5 pr-9 text-xs font-mono hover:border-ph-burgundy transition-colors focus:outline-none focus:ring-2 focus:ring-ph-burgundy/30"
+        aria-label="Select survey to ingest"
+      >
+        {options.map((s) => {
+          const f = getFacility(s.facilityId);
+          return (
+            <option key={s.id} value={s.id}>
+              {f?.name.replace("Pruitthealth ", "")} · {s.surveyDate.slice(0, 10)}
+            </option>
+          );
+        })}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ph-gray-400 pointer-events-none" />
     </div>
   );
 }
@@ -133,7 +195,15 @@ function IdleState() {
 // ─────────────────────────────────────────────────────────────────────
 // Step 1 — Extraction
 // ─────────────────────────────────────────────────────────────────────
-function Step1Extract({ delay }: { delay: number }) {
+function Step1Extract({
+  delay,
+  survey,
+  facility,
+}: {
+  delay: number;
+  survey: Survey;
+  facility: Facility;
+}) {
   return (
     <section className="ph-card overflow-hidden ph-reveal" style={{ animationDelay: `${delay}ms` }}>
       <header className="flex items-baseline justify-between border-b border-ph-gray-200 px-6 py-4">
@@ -141,7 +211,7 @@ function Step1Extract({ delay }: { delay: number }) {
           <div className="ph-eyebrow text-ph-gray-400">Step 1</div>
           <h3 className="text-lg tracking-tight">Document Intelligence — layout extraction</h3>
         </div>
-        <span className="text-[11px] text-ph-gray-400 font-mono">prebuilt-document · 1.4s</span>
+        <span className="text-[11px] text-ph-gray-400 font-mono">custom-cms2567 · 1.4s</span>
       </header>
       <div className="grid grid-cols-12 gap-6 px-6 py-5">
         <div className="col-span-12 md:col-span-4">
@@ -150,21 +220,19 @@ function Step1Extract({ delay }: { delay: number }) {
             <tbody>
               <tr>
                 <td className="py-1 text-ph-gray-500">X1 Provider ID</td>
-                <td className="py-1 font-mono text-right">{DEMO_FACILITY.fhirId.split("/")[1]}</td>
+                <td className="py-1 font-mono text-right">{facility.fhirId.split("/")[1]}</td>
               </tr>
               <tr>
                 <td className="py-1 text-ph-gray-500">X3 Survey date</td>
-                <td className="py-1 font-mono text-right">{DEMO_SURVEY.surveyDate.slice(0, 10)}</td>
+                <td className="py-1 font-mono text-right">{survey.surveyDate.slice(0, 10)}</td>
               </tr>
               <tr>
                 <td className="py-1 text-ph-gray-500">Facility</td>
-                <td className="py-1 text-right">{DEMO_FACILITY.name}</td>
+                <td className="py-1 text-right">{facility.name}</td>
               </tr>
               <tr>
                 <td className="py-1 text-ph-gray-500">Address</td>
-                <td className="py-1 text-right text-[10px]">
-                  {DEMO_FACILITY.address}
-                </td>
+                <td className="py-1 text-right text-[10px]">{facility.address}</td>
               </tr>
             </tbody>
           </table>
@@ -181,13 +249,13 @@ function Step1Extract({ delay }: { delay: number }) {
               </tr>
             </thead>
             <tbody>
-              {DEMO_SURVEY.deficiencies.map((d) => (
-                <tr key={d.ftag} className="border-b border-ph-gray-100">
+              {survey.deficiencies.map((d, i) => (
+                <tr key={`${d.ftag}-${i}`} className="border-b border-ph-gray-100">
                   <td className="py-2 font-mono">{d.ftag}</td>
                   <td className="py-2 text-ph-gray-700">{d.severity}</td>
                   <td className="py-2 text-ph-gray-700">{d.residentsAffected}</td>
                   <td className="py-2 text-right font-mono text-ph-primary">
-                    {(0.95 + Math.random() * 0.04).toFixed(3)}
+                    {(CONFIDENCE_BY_FTAG[d.ftag] ?? 0.95).toFixed(3)}
                   </td>
                 </tr>
               ))}
@@ -202,7 +270,7 @@ function Step1Extract({ delay }: { delay: number }) {
 // ─────────────────────────────────────────────────────────────────────
 // Step 2 — Reason / Content Understanding
 // ─────────────────────────────────────────────────────────────────────
-function Step2Reason({ delay }: { delay: number }) {
+function Step2Reason({ delay, survey }: { delay: number; survey: Survey }) {
   return (
     <section className="ph-card overflow-hidden ph-reveal" style={{ animationDelay: `${delay}ms` }}>
       <header className="flex items-baseline justify-between border-b border-ph-gray-200 px-6 py-4">
@@ -210,14 +278,14 @@ function Step2Reason({ delay }: { delay: number }) {
           <div className="ph-eyebrow text-ph-gray-400">Step 2</div>
           <h3 className="text-lg tracking-tight">Content Understanding — semantic reasoning</h3>
         </div>
-        <span className="text-[11px] text-ph-gray-400 font-mono">gpt-4o · 0.9s</span>
+        <span className="text-[11px] text-ph-gray-400 font-mono">Foundry Tools · 0.9s</span>
       </header>
       <div className="px-6 py-5 grid grid-cols-12 gap-6">
-        {DEMO_SURVEY.deficiencies.map((d) => {
+        {survey.deficiencies.map((d, i) => {
           const t = getFtag(d.ftag);
           return (
             <div
-              key={d.ftag}
+              key={`${d.ftag}-${i}`}
               className="col-span-12 md:col-span-6 rounded border border-ph-gray-200 p-4 bg-ph-gray-50"
             >
               <div className="flex items-center gap-2 mb-3">
@@ -243,7 +311,7 @@ function Step2Reason({ delay }: { delay: number }) {
 // ─────────────────────────────────────────────────────────────────────
 // Step 3 — FHIR Bundle (the marquee)
 // ─────────────────────────────────────────────────────────────────────
-function Step3Fhir({ delay }: { delay: number }) {
+function Step3Fhir({ delay, bundle }: { delay: number; bundle: FhirBundle }) {
   return (
     <section className="ph-card-marquee overflow-hidden ph-reveal" style={{ animationDelay: `${delay}ms` }}>
       <header className="flex items-baseline justify-between border-b border-ph-gray-200 px-6 py-4">
@@ -257,10 +325,10 @@ function Step3Fhir({ delay }: { delay: number }) {
             Azure Health Data Services with SMART-on-FHIR scopes per facility.
           </p>
         </div>
-        <span className="text-[11px] text-ph-gray-400 font-mono">{DEMO_BUNDLE.entry.length} resources</span>
+        <span className="text-[11px] text-ph-gray-400 font-mono">{bundle.entry.length} resources</span>
       </header>
       <div className="p-6">
-        <FhirTreeView bundle={DEMO_BUNDLE} />
+        <FhirTreeView bundle={bundle} />
       </div>
     </section>
   );
@@ -269,7 +337,17 @@ function Step3Fhir({ delay }: { delay: number }) {
 // ─────────────────────────────────────────────────────────────────────
 // Step 4 — Drafted POC
 // ─────────────────────────────────────────────────────────────────────
-function Step4Poc({ delay, done }: { delay: number; done: boolean }) {
+function Step4Poc({
+  delay,
+  done,
+  survey,
+  facility,
+}: {
+  delay: number;
+  done: boolean;
+  survey: Survey;
+  facility: Facility;
+}) {
   return (
     <section className="ph-card overflow-hidden ph-reveal" style={{ animationDelay: `${delay}ms` }}>
       <header className="flex items-baseline justify-between border-b border-ph-gray-200 px-6 py-4">
@@ -283,7 +361,7 @@ function Step4Poc({ delay, done }: { delay: number; done: boolean }) {
         {done && (
           <button
             type="button"
-            onClick={() => downloadPoc(DEMO_SURVEY, DEMO_FACILITY)}
+            onClick={() => downloadPoc(survey, facility)}
             className="inline-flex items-center gap-2 rounded-lg border border-ph-primary text-ph-primary px-4 py-2 text-xs font-medium hover:bg-ph-primary-soft transition-colors"
           >
             <Download className="h-3 w-3" /> Export to Word
@@ -291,7 +369,7 @@ function Step4Poc({ delay, done }: { delay: number; done: boolean }) {
         )}
       </header>
       <ol className="divide-y divide-ph-gray-200">
-        {DEMO_SURVEY.pocActivities.map((a, i) => (
+        {survey.pocActivities.map((a, i) => (
           <li
             key={a.id}
             className="px-6 py-5 ph-reveal"
