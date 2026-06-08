@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Eye, ClipboardList, CheckCircle2 } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { RecentSurveys } from "@/components/dashboard/recent-surveys";
 import { TrendSnapshot } from "@/components/dashboard/trend-snapshot";
@@ -36,6 +36,16 @@ export default function Home() {
             </Link>
           </div>
         </div>
+      </section>
+
+      {/* Benefits strip — frame the value before the numbers (set up the demo). */}
+      <section className="mb-8 ph-reveal flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-ph-gray-600">
+        <span className="ph-eyebrow text-ph-gray-400">What this does</span>
+        <span className="inline-flex items-center gap-1.5"><Eye className="h-3.5 w-3.5 text-ph-primary" strokeWidth={1.6} /> Division-wide visibility</span>
+        <span className="text-ph-gray-300">→</span>
+        <span className="inline-flex items-center gap-1.5"><ClipboardList className="h-3.5 w-3.5 text-ph-primary" strokeWidth={1.6} /> Role-specific action plans</span>
+        <span className="text-ph-gray-300">→</span>
+        <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-ph-primary" strokeWidth={1.6} /> Tracked to completion</span>
       </section>
 
       {/* KPIs — asymmetric grid: 5-3-2-2 instead of 4 equal */}

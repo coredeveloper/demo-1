@@ -6,7 +6,7 @@
 // Lakehouse SQL + AI Search, with cite-or-refuse enforcement. This map
 // models that shape (every answer carries citations) without the real LLM.
 
-import { SURVEYS, getFacility, getFtag } from "./mock-data";
+import { SURVEYS, FACILITIES, getFacility, getFtag, categoryFor, facilitySeverityWeight } from "./mock-data";
 
 export type NlqCitation = {
   surveyId: string;
@@ -60,7 +60,7 @@ export const CANNED: { keywords: string[]; suggest: string; build: () => NlqAnsw
   },
   {
     keywords: ["immediate jeopardy", "ij", "jeopardy", "highest severity", "critical"],
-    suggest: "Show me Immediate Jeopardy cases.",
+    suggest: "Show me Immediate Jeopardy surveys.",
     build: () => {
       const facs = new Set<string>();
       for (const s of ijSurveys) {
@@ -68,8 +68,30 @@ export const CANNED: { keywords: string[]; suggest: string; build: () => NlqAnsw
         if (f) facs.add(f.name);
       }
       return {
-        text: `${ijSurveys.length} Immediate Jeopardy finding(s) in the trailing 12 months across ${facs.size} facility(ies): ${Array.from(facs).map((n) => n.replace("Pruitthealth ", "")).join(", ")}. Each case triggered the cross-facility escalation pathway and is referenced in the corresponding MeasureReport.`,
+        text: `${ijSurveys.length} survey(s) in the trailing 12 months carry an Immediate-Jeopardy citation (grade J–L), across ${facs.size} facility(ies): ${Array.from(facs).map((n) => n.replace("Pruitthealth ", "")).join(", ")}. Each triggered the cross-facility escalation pathway and is referenced in the corresponding MeasureReport.`,
         citations: ijSurveys.map((s) => citationFor(s.id)).filter((c): c is NlqCitation => c !== null),
+      };
+    },
+  },
+  {
+    keywords: ["facilities", "which facilities", "facility ranking", "heaviest", "worst facilities", "highest risk", "priorit"],
+    suggest: "Which facilities carry the heaviest citations?",
+    build: () => {
+      const ranked = [...FACILITIES]
+        .map((f) => ({ f, w: facilitySeverityWeight(f.id) }))
+        .sort((a, b) => b.w - a.w);
+      const top = ranked.slice(0, 3).map(({ f }) => f.name.replace("Pruitthealth ", "")).join(", ");
+      const worst = ranked[0]?.f;
+      const worstSurvey = worst
+        ? SURVEYS.filter((s) => s.facilityId === worst.id).sort(
+            (a, b) => new Date(b.surveyDate).getTime() - new Date(a.surveyDate).getTime(),
+          )[0]
+        : undefined;
+      return {
+        text: `Ranked by scope-severity weight, the heaviest-cited facilities are: ${top}. ${worst ? worst.name.replace("Pruitthealth ", "") : ""} leads on enforcement risk and should be prioritized for Plan-of-Correction review.`,
+        citations: worstSurvey
+          ? [citationFor(worstSurvey.id)].filter((c): c is NlqCitation => c !== null)
+          : [],
       };
     },
   },
@@ -92,13 +114,16 @@ export const CANNED: { keywords: string[]; suggest: string; build: () => NlqAnsw
     },
   },
   {
-    keywords: ["fleming island", "fleming"],
-    suggest: "How does Fleming Island compare to peer average?",
+    keywords: ["fleming island", "fleming", "my facility", "top deficiencies", "my citations"],
+    suggest: "What are the top citations at Fleming Island?",
     build: () => {
       const flem = SURVEYS.filter((s) => s.facilityId === "fleming-island");
-      const avgPerFacility = SURVEYS.length / 5;
+      const open = flem.filter((s) => s.pocStatus !== "POC submitted");
+      const cats = Array.from(
+        new Set(open.flatMap((s) => s.deficiencies.map((d) => categoryFor(d.ftag)))),
+      );
       return {
-        text: `Fleming Island has ${flem.length} surveys in the trailing 12 months versus a division average of ${avgPerFacility.toFixed(1)} per facility. Most-cited F-tag is ${flem[0]?.deficiencies[0]?.ftag ?? "F0677"} (matches the division-wide leader). Severity mix is in line with peers.`,
+        text: `Fleming Island has ${open.length} open survey(s). The active citations span ${cats.join(", ")} — led by Infection Prevention & Control at Immediate Jeopardy (grade L), which requires a Plan of Correction immediately. Staffing and Comprehensive Care Planning are at actual-harm grade.`,
         citations: flemingSurveys.map((s) => citationFor(s.id)).filter((c): c is NlqCitation => c !== null),
       };
     },
