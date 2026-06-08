@@ -44,6 +44,8 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
   const topCats = Array.from(catMap.entries())
     .sort((a, b) => b[1].worst.localeCompare(a[1].worst) || b[1].count - a[1].count)
     .slice(0, 6);
+  // Scale bars to the true max count (rows are ordered by grade, not count).
+  const maxCatCount = Math.max(...topCats.map(([, info]) => info.count), 1);
 
   // Open citation roadmap (what the DON works now), grouped by citation.
   const openGroups = citationGroupsForFacility(id, true);
@@ -98,8 +100,7 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
         <div className="ph-card p-6">
           <ul className="space-y-2.5">
             {topCats.map(([cat, info]) => {
-              const max = topCats[0]![1].count;
-              const pct = (info.count / max) * 100;
+              const pct = (info.count / maxCatCount) * 100;
               const band = scopeSeverityBand(info.worst);
               const anchor = anchorByCategory.get(cat);
               return (
