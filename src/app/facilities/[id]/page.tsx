@@ -21,6 +21,13 @@ const GRADE_PILL: Record<string, string> = {
   "self-correct": "bg-ph-primary-soft text-ph-primary",
 };
 
+const GRADE_TEXT: Record<string, string> = {
+  "immediate-jeopardy": "text-ph-burgundy",
+  "actual-harm": "text-[var(--sev-actual)]",
+  minimal: "text-ph-amber",
+  "self-correct": "text-ph-primary",
+};
+
 export default async function FacilityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const facility = FACILITIES.find((f) => f.id === id);
@@ -112,7 +119,12 @@ export default async function FacilityDetailPage({ params }: { params: Promise<{
                     <span className={cn("inline-block rounded px-1.5 py-0.5 font-display text-xs shrink-0 w-7 text-center", GRADE_PILL[band.band])} title={`Worst grade ${info.worst} · ${band.action}`}>
                       {info.worst}
                     </span>
-                    <span className="text-ph-ink w-56 shrink-0 truncate font-medium">{cat}</span>
+                    <div className="w-56 shrink-0 min-w-0">
+                      <div className="text-ph-ink truncate font-medium">{cat}</div>
+                      <div className={cn("text-[10px] truncate", GRADE_TEXT[band.band])}>
+                        Worst: grade {info.worst} · {band.label}
+                      </div>
+                    </div>
                     <div className="flex-1 h-1.5 bg-ph-gray-100 rounded-full overflow-hidden">
                       <div className="h-full bg-ph-primary rounded-full" style={{ width: `${pct}%` }} />
                     </div>
