@@ -4,8 +4,10 @@ import Link from "next/link";
 import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ChevronDown, X } from "lucide-react";
+import { Lock } from "lucide-react";
 import { SURVEYS_BY_DATE_DESC, getFacility, FACILITIES, FTAGS } from "@/lib/mock-data";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
+import { usePersona } from "@/components/layout/persona-context";
 import { formatDate, daysUntil, cn } from "@/lib/utils";
 import type { Severity } from "@/lib/types";
 
@@ -34,6 +36,8 @@ export default function SurveysPage() {
 function SurveysPageImpl() {
   const router = useRouter();
   const params = useSearchParams();
+  const { persona } = usePersona();
+  const scopeFacility = persona.facilityId; // null = regional, sees all
   const facility = params.get("facility") ?? "";
   const ftag = params.get("ftag") ?? "";
   const status = params.get("status") ?? "all";
@@ -41,6 +45,7 @@ function SurveysPageImpl() {
 
   const filtered = useMemo(() => {
     return SURVEYS_BY_DATE_DESC.filter((s) => {
+      if (scopeFacility && s.facilityId !== scopeFacility) return false; // RBAC scope
       if (facility && s.facilityId !== facility) return false;
       if (ftag && !s.deficiencies.some((d) => d.ftag === ftag)) return false;
       if (status === "open" && s.pocStatus === "POC submitted") return false;
@@ -48,7 +53,7 @@ function SurveysPageImpl() {
       if (severity !== "all" && s.worstSeverity !== severity) return false;
       return true;
     });
-  }, [facility, ftag, status, severity]);
+  }, [scopeFacility, facility, ftag, status, severity]);
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
@@ -71,15 +76,21 @@ function SurveysPageImpl() {
       {/* Filter bar */}
       <div className="ph-card mb-6 p-4 flex flex-wrap items-center gap-3">
         <span className="ph-eyebrow text-ph-gray-400">Filter</span>
-        <FilterSelect
-          ariaLabel="Facility"
-          value={facility}
-          options={[
-            { value: "", label: "All facilities" },
-            ...FACILITIES.map((f) => ({ value: f.id, label: f.name.replace("Pruitthealth ", "") })),
-          ]}
-          onChange={(v) => setParam("facility", v)}
-        />
+        {scopeFacility ? (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-ph-primary-soft bg-ph-primary-soft px-3 py-1.5 text-xs text-ph-primary font-medium">
+            <Lock className="h-3 w-3" /> {persona.facilityLabel} · your facility
+          </span>
+        ) : (
+          <FilterSelect
+            ariaLabel="Facility"
+            value={facility}
+            options={[
+              { value: "", label: "All facilities" },
+              ...FACILITIES.map((f) => ({ value: f.id, label: f.name.replace("Pruitthealth ", "") })),
+            ]}
+            onChange={(v) => setParam("facility", v)}
+          />
+        )}
         <FilterSelect
           ariaLabel="F-tag"
           value={ftag}

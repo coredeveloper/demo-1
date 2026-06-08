@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { PageFooter } from "@/components/layout/page-footer";
+import { PersonaProvider } from "@/components/layout/persona-context";
 import "./globals.css";
 
 const publicSans = Public_Sans({
@@ -46,14 +47,16 @@ export default function RootLayout({
     >
       <body className="bg-ph-gray-50 text-ph-ink">
         <DemoBanner />
-        <div className="grid min-h-[calc(100vh-28px)] grid-cols-[260px_1fr]">
-          <Sidebar />
-          <div className="flex flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-            <PageFooter />
+        <PersonaProvider>
+          <div className="grid min-h-[calc(100vh-28px)] grid-cols-[260px_1fr]">
+            <Sidebar />
+            <div className="flex flex-col">
+              <Header />
+              <main className="flex-1">{children}</main>
+              <PageFooter />
+            </div>
           </div>
-        </div>
+        </PersonaProvider>
       </body>
     </html>
   );
