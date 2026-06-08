@@ -1,0 +1,121 @@
+---
+description: PruittHealth design system — brand colors, typography, components, and the editorial-healthcare aesthetic. Apply when building or editing ANY UI (pages, React components, CSS) so it matches the PruittHealth look. Extracted from src/app/globals.css (source of truth).
+globs: **/*.tsx,**/*.jsx,**/*.css
+alwaysApply: false
+---
+
+# PruittHealth Design System
+
+Editorial-healthcare aesthetic for a Microsoft-native compliance/clinical product. Think a premium quarterly report, not a generic SaaS dashboard: refined serif display + humanist sans body, warm-white paper, asymmetric grids, generous negative space, restrained motion. The brand is derived from PruittHealth's tree-and-figure logo (teal + burgundy + sage).
+
+**Source of truth:** `src/app/globals.css` (tokens + `ph-*` utility classes) and `src/app/layout.tsx` (fonts). If anything here conflicts with those files, the files win — and update this rule.
+
+---
+
+## Hard rules (do / don't)
+
+- ✅ Use the `--ph-*` tokens and `ph-*` utility classes — never hardcode hex values in components. In Tailwind use the generated classes: `bg-ph-primary`, `text-ph-burgundy`, `border-ph-gray-200`, etc.
+- ✅ Headings (`h1/h2/h3`) render in **Fraunces** automatically (set globally). For display type inside other elements use `font-display`.
+- ✅ Body copy = **Public Sans** (`font-sans`, the default). Code/JSON/IDs = **JetBrains Mono** (`font-mono`).
+- ✅ Compose classNames with `cn()` from `@/lib/utils` (clsx + tailwind-merge).
+- ✅ Asymmetric layouts (e.g. 5-3-2-2 or 8-4 column splits), `max-w-[1500px]`, page padding `px-10`.
+- ❌ **No Inter, Roboto, Arial, or system-ui** for display/body. No generic "AI dashboard" look.
+- ❌ **No purple/violet gradients.** No neon. No cold pure-grey backgrounds — the page is warm white (`--ph-gray-50` `#FAFAF8`).
+- ❌ Don't invent new accent colors. The palette is teal / burgundy / sage / amber + the warm grays. That's it.
+- ❌ Don't put white text on `--sev-minimal`/`--sev-no-harm` without checking contrast (tokens are already AA-tuned; keep them).
+
+---
+
+## Color tokens (exact)
+
+| Token / Tailwind | Hex | Use |
+|---|---|---|
+| `--ph-primary` · `ph-primary` | `#0E5752` | Teal — chrome, primary buttons, headings accent, KPI numbers |
+| `--ph-primary-dark` · `ph-primary-dark` | `#0A403C` | Teal hover/active |
+| `--ph-primary-soft` · `ph-primary-soft` | `#E8F0EE` | Sage tint — soft backgrounds, active nav, dividers |
+| `--ph-burgundy` · `ph-burgundy` | `#7B2D3F` | **Marquee accent** — FHIR/hero card stripe, Immediate-Jeopardy, "synthetic" badges, selection |
+| `--ph-burgundy-soft` · `ph-burgundy-soft` | `#F4E4E7` | Burgundy tint background |
+| `--ph-sage` · `ph-sage` | `#9FB8B0` | Soft accents, secondary text on dark, card borders' cousin |
+| `--ph-amber` · `ph-amber` | `#B8862B` | Tertiary accent — warnings, "actual harm", mid-intensity |
+| `--ph-ink` · `ph-ink` | `#14171C` | Near-black body text |
+| `--ph-paper` · `ph-paper` | `#FFFFFF` | Card body, surfaces |
+| `--ph-gray-50` · `ph-gray-50` | `#FAFAF8` | **Page background — warm, not cold** |
+| `--ph-gray-100` · `ph-gray-100` | `#F4F1EB` | Subtle fills, code chips |
+| `--ph-gray-200` · `ph-gray-200` | `#E5E1D8` | Borders, dotted rules |
+| `--ph-gray-400` · `ph-gray-400` | `#9CA3AF` | Muted icons, placeholder |
+| `--ph-gray-500` · `ph-gray-500` | `#6B6F75` | Secondary/caption text, eyebrows |
+| `--ph-gray-700` · `ph-gray-700` | `#2A2D33` | Strong body, dark labels |
+
+**Severity scale** (heatmaps, badges; AA-tuned for white text, lightest→darkest):
+`--sev-no-harm` `#6F8B83` · `--sev-minimal` `#A06A2C` · `--sev-actual` `#7A4F1F` · `--sev-jeopardy` `#7B2D3F` (= burgundy).
+
+**Charts:** `--chart-1..5` = primary, burgundy, amber, sage, gray-700 (in that order).
+
+**Shadows:** `--shadow-card` (resting), `--shadow-card-hover` (lift on hover), `--shadow-marquee` (burgundy-tinted glow for hero/FHIR cards).
+
+---
+
+## Typography
+
+- **Display — Fraunces** (variable font, axes `opsz` + `SOFT`). Loaded as `--font-fraunces` → `font-display`. Used automatically on `h1/h2/h3` with `letter-spacing: -0.02em`. Heading optical sizes: h1 `opsz 144`, h2 `opsz 96`, h3 `opsz 48` (all weight 500, `SOFT 50`). In Next.js, Fraunces is configured with `axes` and **no `weight`** (variable). Don't add a `weight` array to it.
+- **Body — Public Sans** (`--font-public-sans` → `font-sans`, weights 400/500/600/700). `font-feature-settings: "ss01","ss02"`. This is the default everywhere.
+- **Mono — JetBrains Mono** (`--font-jetbrains-mono` → `font-mono`, 400/500). For FHIR/JSON, IDs, F-tags, code chips.
+- **KPI number** — class `ph-kpi-num`: Fraunces, 3.5rem, teal, tabular-nums, tight tracking. Use for the big dashboard stats.
+- **Eyebrow** — class `ph-eyebrow`: 11px, 600, uppercase, `0.08em` tracking, gray-500. Use above section titles and card headers.
+
+---
+
+## Layout
+
+- Root shell: fixed **260px** sidebar + flexible main (`grid-cols-[260px_1fr]`), with `Header` and a slim `PageFooter`.
+- Page content: `max-w-[1500px]`, horizontal padding `px-10`, top padding `pt-6`/`pt-8`.
+- **Asymmetric grids on a 12-col base** — e.g. KPI row `5 / 3 / 2 / 2`, body `8 / 4`. Avoid four equal columns; lean into intentional imbalance + negative space.
+- Section rhythm: `ph-eyebrow` label → title → content, separated by `ph-rule` dotted dividers in editorial flow.
+
+---
+
+## Components & utility classes (defined in globals.css)
+
+- **`.ph-card`** — white paper, 1px `ph-gray-200` border, 10px radius, `--shadow-card`. The default surface. Add `transition-shadow hover:shadow-[var(--shadow-card-hover)]` for interactive cards.
+- **`.ph-card-marquee`** — same card + **4px burgundy left bar** + `--shadow-marquee`. Reserve for the ONE hero/FHIR/"this is the point" card per view.
+- **`.ph-rule`** — 1px dotted `ph-gray-200` divider. Use between editorial sections, not as a heavy border.
+- **`.ph-grain`** — subtle SVG paper-noise overlay (`::before`, 0.6 opacity, multiply). Apply to hero bands / large empty surfaces for tactile depth, never on dense content.
+- **`.ph-eyebrow`**, **`.ph-kpi-num`** — see Typography.
+- **`.ph-json-*`** — token colors for the FHIR/JSON tree viewer (key=burgundy, string=teal, number/boolean=amber, null=gray).
+- **Severity badge pattern** — pill, per-tier background tint + AA text color from the `--sev-*` scale; Immediate Jeopardy = solid burgundy + white. (See `src/components/dashboard/severity-badge.tsx`.)
+- **Decorative `CanopyOrnament`** (`src/components/decorative/canopy.tsx`) — the PruittHealth tree+figure motif as a low-opacity (~6%) background ornament on empty/idle states only. Never at full strength, never over content.
+- **Badges/chips** — pill, `ph-primary-soft` bg + `ph-primary` text for neutral; `ph-burgundy-soft` + `ph-burgundy` for accent/synthetic markers; F-tags/codes in `font-mono` on `ph-gray-100`.
+
+---
+
+## Motion (restraint)
+
+- **`.ph-reveal`** — one-time staggered entrance (8px rise + fade, 0.6s ease-out). Apply to cards/rows with incremental `style={{ animationDelay }}` (e.g. `100 + i*60`ms) for a calm cascade on load. This is the primary motion language.
+- **`.ph-pulse`** — gentle 2.4s scale/opacity loop for a single "active/processing" indicator (e.g. a live dot). Use sparingly — one per view.
+- Prefer `transition-shadow`/`transition-colors` for hover. No bouncy, no parallax, no scroll-jacking. The `motion` (Framer) lib is available for `whileInView` reveals when something should "land" on scroll — keep it subtle.
+
+---
+
+## Icons
+
+- **lucide-react**, thin strokes (`strokeWidth={1.4}`–`1.6`), sized 3–4 (`h-3.5 w-3.5` for inline, `h-10 w-10` for empty-state). Color via `text-ph-*`. No filled/duotone icon sets.
+
+---
+
+## Stack conventions
+
+- Next.js App Router + TypeScript + **Tailwind CSS v4** (CSS-config: tokens live in `globals.css` under `:root` and are exposed to Tailwind via `@theme inline`). There is **no `tailwind.config.js`** — add new tokens in `globals.css` (`:root` + the matching `@theme inline` line), never inline hex.
+- shadcn/ui primitives over Radix are available; restyle them to these tokens (don't ship default shadcn slate/zinc).
+- `cn()` from `@/lib/utils` for class composition. Path alias `@/*` → `src/*`.
+
+---
+
+## When generating new UI, the checklist
+
+1. Surface = `ph-card` (or `ph-card-marquee` for the single hero).
+2. Section opens with a `ph-eyebrow` label + Fraunces heading.
+3. Colors only from tokens; the one accent is burgundy, used once for emphasis.
+4. Asymmetric grid, warm-white page, generous whitespace.
+5. Entrance via `ph-reveal` with a small staggered delay; hover via shadow lift.
+6. Mono for any code/ID/F-tag; tabular-nums for stat numbers.
+7. No Inter/Roboto, no purple gradients, no four-equal-columns, no cold grey.

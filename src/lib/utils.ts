@@ -29,3 +29,15 @@ export function daysUntil(d: Date | string): number {
   const date = typeof d === "string" ? new Date(d) : d;
   return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
 }
+
+/** Group an array into ordered [key, items] pairs (insertion order preserved). */
+export function groupBy<T, K>(arr: T[], keyFn: (item: T) => K): [K, T[]][] {
+  const map = new Map<K, T[]>();
+  for (const item of arr) {
+    const key = keyFn(item);
+    const bucket = map.get(key);
+    if (bucket) bucket.push(item);
+    else map.set(key, [item]);
+  }
+  return Array.from(map.entries());
+}

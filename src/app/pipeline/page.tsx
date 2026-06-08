@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Play, RotateCcw, FileText, Download, ChevronDown } from "lucide-react";
+import { Play, RotateCcw, FileText, Download, ChevronDown, Sparkles } from "lucide-react";
 import { PipelineStepper, type Step } from "@/components/pipeline/pipeline-stepper";
 import { FhirTreeView } from "@/components/fhir/fhir-tree-view";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
-import { SURVEYS, getFacility, getFtag, CONFIDENCE_BY_FTAG } from "@/lib/mock-data";
+import { SURVEYS, getFacility, getFtag, categoryFor, CONFIDENCE_BY_FTAG } from "@/lib/mock-data";
 import { passagesFor, passageLabel } from "@/lib/mock-narratives";
 import { buildBundle } from "@/lib/mock-fhir";
 import { downloadPoc } from "@/lib/word-export";
@@ -292,6 +292,7 @@ function Step2Reason({ delay, survey }: { delay: number; survey: Survey }) {
               key={`${d.ftag}-${i}`}
               className="col-span-12 md:col-span-6 rounded border border-ph-gray-200 p-4 bg-ph-gray-50"
             >
+              <div className="ph-eyebrow text-ph-gray-400 mb-1">{categoryFor(d.ftag)}</div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="font-mono text-xs text-ph-burgundy">{d.ftag}</span>
                 <SeverityBadge severity={d.severity} compact />
@@ -365,6 +366,10 @@ function Step4Poc({
           <h3 className="text-lg tracking-tight">Foundry POC drafting agent</h3>
           <p className="text-[11px] text-ph-gray-500 mt-0.5">
             RAG over historical accepted POCs. Cite-or-refuse grounding. Refuses if no relevant exemplar.
+          </p>
+          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-ph-burgundy">
+            <Sparkles className="h-3 w-3" />
+            Self-learning — grounded in 3–4 years of accepted POCs across GA/FL; sharpens as more are approved, with no access to resident PII.
           </p>
         </div>
         {done && (

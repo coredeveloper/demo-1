@@ -4,10 +4,18 @@ import { useState } from "react";
 import { FileText, Network, ClipboardCheck, FileType2 } from "lucide-react";
 import { FhirTreeView } from "@/components/fhir/fhir-tree-view";
 import { SeverityBadge } from "@/components/dashboard/severity-badge";
+import { CitationActionGroup } from "@/components/poc/citation-action-group";
 import { cn } from "@/lib/utils";
 import type { Survey, Facility } from "@/lib/types";
 import type { FhirBundle } from "@/lib/mock-fhir";
-import { getFtag } from "@/lib/mock-data";
+import { getFtag, categoryFor, scopeSeverityBand, citationGroupsForSurvey } from "@/lib/mock-data";
+
+const GRADE_PILL: Record<string, string> = {
+  "immediate-jeopardy": "bg-ph-burgundy text-white",
+  "actual-harm": "bg-[var(--sev-actual)] text-white",
+  minimal: "bg-ph-amber text-white",
+  "self-correct": "bg-ph-primary-soft text-ph-primary",
+};
 
 type Tab = "summary" | "fhir" | "poc" | "pdf";
 
@@ -77,18 +85,25 @@ function SummaryPanel({ survey }: { survey: Survey }) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {survey.deficiencies.map((d, i) => {
         const ftag = getFtag(d.ftag);
+        const band = scopeSeverityBand(d.scopeSeverity);
         return (
           <article
             key={`${d.ftag}-${i}`}
             className="ph-card p-5 ph-reveal"
             style={{ animationDelay: `${i * 80}ms` }}
           >
-            <div className="flex items-baseline justify-between mb-2">
-              <span className="font-mono text-sm text-ph-burgundy">{d.ftag}</span>
-              <SeverityBadge severity={d.severity} compact />
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="ph-eyebrow text-ph-gray-400">{categoryFor(d.ftag)}</div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <SeverityBadge severity={d.severity} compact />
+                <span className={cn("inline-block rounded px-1.5 py-0.5 font-display text-xs", GRADE_PILL[band.band])} title={band.action}>
+                  {d.scopeSeverity}
+                </span>
+              </div>
             </div>
             <h4 className="text-sm font-medium text-ph-ink mb-1 leading-snug">
               {ftag?.shortTitle ?? d.ftag}
+              <span className="ml-1.5 font-mono text-[11px] text-ph-gray-400">{d.ftag}</span>
             </h4>
             <p className="text-[11px] text-ph-gray-500 mb-3 leading-relaxed">{ftag?.title}</p>
             <div className="ph-eyebrow text-ph-gray-400 mb-1">Residents affected</div>
@@ -123,39 +138,16 @@ function FhirPanel({ bundle }: { bundle: FhirBundle }) {
 }
 
 function PocPanel({ survey }: { survey: Survey }) {
+  const groups = citationGroupsForSurvey(survey);
   return (
-    <div>
-      <div className="mb-3 flex items-baseline justify-between">
-        <p className="text-xs text-ph-gray-500 max-w-2xl">
-          {survey.pocActivities.length} corrective activities. Each cites a historical accepted
-          POC retrieved by the Foundry agent for the same F-tag.
-        </p>
-      </div>
-      <ol className="ph-card divide-y divide-ph-gray-200">
-        {survey.pocActivities.map((a, i) => (
-          <li key={a.id} className="px-6 py-4">
-            <div className="flex items-start gap-4">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ph-primary-soft text-ph-primary text-[11px] font-display font-medium shrink-0">
-                {i + 1}
-              </span>
-              <div className="flex-1">
-                <p className="text-sm text-ph-ink leading-relaxed">{a.text}</p>
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-ph-gray-500">
-                  <span>Target: {a.targetCompletionDate}</span>
-                  <span className="text-ph-gray-300">·</span>
-                  <span className="font-mono text-ph-burgundy">cites {a.citation.exemplarFtag}</span>
-                </div>
-                <blockquote className="mt-2 border-l-2 border-ph-sage/50 pl-3 text-[11px] italic text-ph-gray-500 leading-relaxed">
-                  &ldquo;{a.citation.quote}&rdquo;
-                  <span className="block not-italic font-mono text-[10px] text-ph-gray-400 mt-1">
-                    — {a.citation.exemplarId}
-                  </span>
-                </blockquote>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ol>
+    <div className="space-y-5">
+      <p className="text-xs text-ph-gray-500 max-w-2xl">
+        {survey.pocActivities.length} corrective activities, grouped by citation so each clinical
+        owner works only their items. Each set is grounded in historical accepted POCs for the same F-tag.
+      </p>
+      {groups.map((g, i) => (
+        <CitationActionGroup key={`${g.ftag}-${i}`} group={g} index={i} />
+      ))}
     </div>
   );
 }

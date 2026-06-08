@@ -3,6 +3,7 @@ import type {
   FTag,
   Survey,
   Deficiency,
+  PocActivity,
   Severity,
   ResidentsAffected,
   PocStatus,
@@ -106,21 +107,22 @@ export const FACILITIES: Facility[] = [
 // (Source language adapted from CMS State Operations Manual Appendix PP)
 // ─────────────────────────────────────────────────────────────────────────────
 export const FTAGS: FTag[] = [
-  { code: "F0677", title: "Provide care and assistance to perform activities of daily living for any resident who is unable", shortTitle: "ADL care" },
-  { code: "F0689", title: "Free of accident hazards / supervision / devices", shortTitle: "Accident hazards" },
-  { code: "F0686", title: "Treatment / services to prevent / heal pressure ulcers", shortTitle: "Pressure ulcer prevention" },
-  { code: "F0656", title: "Develop / implement comprehensive care plan", shortTitle: "Care plan" },
-  { code: "F0584", title: "Safe / clean / comfortable / homelike environment", shortTitle: "Environment safety" },
-  { code: "F0880", title: "Infection prevention and control", shortTitle: "Infection control" },
-  { code: "F0812", title: "Food procurement, store, prepare, serve — sanitary", shortTitle: "Food sanitation" },
-  { code: "F0658", title: "Services provided meet professional standards", shortTitle: "Professional standards" },
-  { code: "F0641", title: "Accuracy of assessments", shortTitle: "Assessment accuracy" },
-  { code: "F0636", title: "Comprehensive assessments + timing", shortTitle: "Comprehensive assessment" },
-  { code: "F0697", title: "Pain management", shortTitle: "Pain management" },
-  { code: "F0759", title: "Free of medication error rates of 5% or more", shortTitle: "Medication error rate" },
-  { code: "F0693", title: "Tube feeding management / restore eating skills", shortTitle: "Tube feeding" },
-  { code: "F0684", title: "Quality of care", shortTitle: "Quality of care" },
-  { code: "F0550", title: "Resident rights / exercise of rights", shortTitle: "Resident rights" },
+  { code: "F0677", title: "Provide care and assistance to perform activities of daily living for any resident who is unable", shortTitle: "ADL care", category: "Activities of Daily Living" },
+  { code: "F0689", title: "Free of accident hazards / supervision / devices", shortTitle: "Accident hazards", category: "Accidents & Environmental Safety" },
+  { code: "F0686", title: "Treatment / services to prevent / heal pressure ulcers", shortTitle: "Pressure ulcer prevention", category: "Skin & Wound Care" },
+  { code: "F0656", title: "Develop / implement comprehensive care plan", shortTitle: "Care plan", category: "Comprehensive Care Planning" },
+  { code: "F0584", title: "Safe / clean / comfortable / homelike environment", shortTitle: "Environment safety", category: "Accidents & Environmental Safety" },
+  { code: "F0880", title: "Infection prevention and control", shortTitle: "Infection control", category: "Infection Prevention & Control" },
+  { code: "F0812", title: "Food procurement, store, prepare, serve — sanitary", shortTitle: "Food sanitation", category: "Food & Sanitation" },
+  { code: "F0725", title: "Sufficient nursing staff to meet residents' needs", shortTitle: "Sufficient staffing", category: "Staffing" },
+  { code: "F0658", title: "Services provided meet professional standards", shortTitle: "Professional standards", category: "Professional Standards" },
+  { code: "F0641", title: "Accuracy of assessments", shortTitle: "Assessment accuracy", category: "Assessments" },
+  { code: "F0636", title: "Comprehensive assessments + timing", shortTitle: "Comprehensive assessment", category: "Assessments" },
+  { code: "F0697", title: "Pain management", shortTitle: "Pain management", category: "Pain Management" },
+  { code: "F0759", title: "Free of medication error rates of 5% or more", shortTitle: "Medication error rate", category: "Medication" },
+  { code: "F0693", title: "Tube feeding management / restore eating skills", shortTitle: "Tube feeding", category: "Nutrition & Feeding" },
+  { code: "F0684", title: "Quality of care", shortTitle: "Quality of care", category: "Quality of Care" },
+  { code: "F0550", title: "Resident rights / exercise of rights", shortTitle: "Resident rights", category: "Resident Rights" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,6 +157,7 @@ const FTAG_WEIGHTS: { value: string; weight: number }[] = [
   { value: "F0656", weight: 9 },
   { value: "F0584", weight: 8 },
   { value: "F0880", weight: 7 },
+  { value: "F0725", weight: 6 },
   { value: "F0812", weight: 5 },
   { value: "F0658", weight: 4 },
   { value: "F0641", weight: 3 },
@@ -175,6 +178,7 @@ export const CONFIDENCE_BY_FTAG: Record<string, number> = {
   F0656: 0.953,
   F0584: 0.978,
   F0880: 0.991,
+  F0725: 0.966,
   F0812: 0.969,
   F0658: 0.946,
   F0641: 0.957,
@@ -218,6 +222,44 @@ const SEVERITY_RANK: Record<Severity, number> = {
   "No actual harm with potential for minimal harm": 1,
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS scope-severity grid (Appendix P). Rows = severity tier, columns = scope
+// (Isolated / Pattern / Widespread ≈ Few / Some / Many residents affected).
+// The letter is what appears on the 2567 and drives enforcement:
+//   A–C self-correct · D–F minimal · G–I actual harm · J–L Immediate Jeopardy.
+// ─────────────────────────────────────────────────────────────────────────────
+const SCOPE_SEVERITY_GRID: Record<Severity, [string, string, string]> = {
+  "Immediate jeopardy": ["J", "K", "L"],
+  "Actual harm": ["G", "H", "I"],
+  "Minimal harm or potential for actual harm": ["D", "E", "F"],
+  "No actual harm with potential for minimal harm": ["A", "B", "C"],
+};
+const SCOPE_COL: Record<ResidentsAffected, 0 | 1 | 2> = { Few: 0, Some: 1, Many: 2 };
+
+export function scopeSeverityLetter(severity: Severity, scope: ResidentsAffected): string {
+  return SCOPE_SEVERITY_GRID[severity][SCOPE_COL[scope]];
+}
+
+export type ScopeSeverityBand = {
+  band: "self-correct" | "minimal" | "actual-harm" | "immediate-jeopardy";
+  label: string;
+  action: string;
+};
+
+export function scopeSeverityBand(letter: string): ScopeSeverityBand {
+  if (letter >= "J") return { band: "immediate-jeopardy", label: "Immediate Jeopardy", action: "State enforcement — POC required immediately" };
+  if (letter >= "G") return { band: "actual-harm", label: "Actual harm", action: "Substandard care — corrective action required" };
+  if (letter >= "D") return { band: "minimal", label: "Potential for more than minimal harm", action: "Correct within the POC window" };
+  return { band: "self-correct", label: "No actual harm", action: "Low-level — facility self-corrects" };
+}
+
+type ScriptedDeficiency = {
+  ftag: string;
+  severity: Severity;
+  residentsAffected: ResidentsAffected;
+  narrative: string;
+};
+
 type BuildOpts = {
   /** Days before today; if undefined, uses the historical 12-month spread. */
   daysBack?: number;
@@ -225,6 +267,10 @@ type BuildOpts = {
   forceWorstSeverity?: Severity;
   /** Bias the POC status weights toward "draft pending review" so the dashboard reads alive. */
   biasOpen?: boolean;
+  /** Hand-authored deficiency set (hero survey) — bypasses random generation. */
+  scriptedDeficiencies?: ScriptedDeficiency[];
+  /** Pin the POC status (hero survey must stay open so it shows in POC Review). */
+  forcePocStatus?: PocStatus;
 };
 
 function buildSurvey(seed: number, idx: number, opts: BuildOpts = {}): Survey {
@@ -244,28 +290,50 @@ function buildSurvey(seed: number, idx: number, opts: BuildOpts = {}): Survey {
 
   const surveyType = rand() < 0.85 ? "health-inspection" : "complaint-inspection";
 
-  // 1-4 deficiencies
-  const deficiencyCount = Math.floor(rand() * 3) + 1;
-  const usedFtags = new Set<string>();
+  // Deficiencies — a hand-authored set (hero survey) or 1-4 random ones.
   const deficiencies: Deficiency[] = [];
-  for (let i = 0; i < deficiencyCount; i++) {
-    let ftag = pickWeighted(rand, FTAG_WEIGHTS);
-    let attempts = 0;
-    while (usedFtags.has(ftag) && attempts < 10) {
-      ftag = pickWeighted(rand, FTAG_WEIGHTS);
-      attempts++;
+  if (opts.scriptedDeficiencies) {
+    for (const d of opts.scriptedDeficiencies) {
+      deficiencies.push({
+        ftag: d.ftag,
+        severity: d.severity,
+        residentsAffected: d.residentsAffected,
+        narrative: d.narrative,
+        scopeSeverity: scopeSeverityLetter(d.severity, d.residentsAffected),
+      });
     }
-    usedFtags.add(ftag);
-    const severity = pickWeighted(rand, SEVERITY_WEIGHTS);
-    const residentsAffected = pickWeighted(rand, RES_AFFECTED_WEIGHTS);
-    const narrative = NARRATIVES[Math.floor(rand() * NARRATIVES.length)]!;
-    deficiencies.push({ ftag, severity, residentsAffected, narrative });
-  }
+  } else {
+    const deficiencyCount = Math.floor(rand() * 3) + 1;
+    const usedFtags = new Set<string>();
+    for (let i = 0; i < deficiencyCount; i++) {
+      let ftag = pickWeighted(rand, FTAG_WEIGHTS);
+      let attempts = 0;
+      while (usedFtags.has(ftag) && attempts < 10) {
+        ftag = pickWeighted(rand, FTAG_WEIGHTS);
+        attempts++;
+      }
+      usedFtags.add(ftag);
+      const severity = pickWeighted(rand, SEVERITY_WEIGHTS);
+      const residentsAffected = pickWeighted(rand, RES_AFFECTED_WEIGHTS);
+      const narrative = NARRATIVES[Math.floor(rand() * NARRATIVES.length)]!;
+      deficiencies.push({
+        ftag,
+        severity,
+        residentsAffected,
+        narrative,
+        scopeSeverity: scopeSeverityLetter(severity, residentsAffected),
+      });
+    }
 
-  // If caller wants to guarantee a specific severity tier, promote the first
-  // deficiency. (Used to ensure ≥1 Immediate Jeopardy in the recent batch.)
-  if (opts.forceWorstSeverity && deficiencies[0]) {
-    deficiencies[0].severity = opts.forceWorstSeverity;
+    // If caller wants to guarantee a specific severity tier, promote the first
+    // deficiency. (Used to ensure ≥1 Immediate Jeopardy in the recent batch.)
+    if (opts.forceWorstSeverity && deficiencies[0]) {
+      deficiencies[0].severity = opts.forceWorstSeverity;
+      deficiencies[0].scopeSeverity = scopeSeverityLetter(
+        opts.forceWorstSeverity,
+        deficiencies[0].residentsAffected,
+      );
+    }
   }
 
   // Worst severity = highest-rank
@@ -283,11 +351,16 @@ function buildSurvey(seed: number, idx: number, opts: BuildOpts = {}): Survey {
         { value: "in extraction", weight: 15 },
       ] as { value: PocStatus; weight: number }[])
     : STATUS_WEIGHTS;
-  const pocStatus = pickWeighted(rand, statusWeights);
+  const pocStatus = opts.forcePocStatus ?? pickWeighted(rand, statusWeights);
   const pocDueDate = new Date(surveyDate.getTime() + 10 * 86_400_000); // 10-day window
   const id = `survey-${facility.id}-${idx}-${Math.floor(surveyDate.getTime() / 86_400_000)}`;
 
-  const pocActivities = mockPocActivities(deficiencies, rand);
+  // Submitted POCs carry completed actions with an evidence trail (the tracking
+  // story); open drafts start "not started" so the DON has work to do live.
+  const pocActivities = mockPocActivities(deficiencies, rand, {
+    completedBias: pocStatus === "POC submitted" ? 0.65 : 0,
+    baseDate: surveyDate,
+  });
 
   return {
     id,
@@ -320,12 +393,47 @@ const _historical: Survey[] = Array.from({ length: 25 }, (_, i) =>
   buildSurvey(SEED_BASE + i * 7, i),
 );
 
-const RECENT_PROFILES = [
-  { daysBack: 2,  biasOpen: true,  forceWorstSeverity: undefined },
-  { daysBack: 4,  biasOpen: true,  forceWorstSeverity: undefined },
-  { daysBack: 9,  biasOpen: true,  forceWorstSeverity: "Immediate jeopardy" as Severity },
-  { daysBack: 14, biasOpen: true,  forceWorstSeverity: undefined },
-  { daysBack: 21, biasOpen: true,  forceWorstSeverity: undefined },
+// Hero survey (recent Fleming Island, idx 25) — hand-authored so the live demo
+// walks the citations Minesh asked for: care planning, infection control,
+// staffing, accidents. One Immediate-Jeopardy (infection control) anchors the
+// scope-severity / enforcement story.
+const FLEMING_HERO_DEFICIENCIES: ScriptedDeficiency[] = [
+  {
+    ftag: "F0880",
+    severity: "Immediate jeopardy",
+    residentsAffected: "Many",
+    narrative:
+      "Surveyor reviewed infection-control logs for the 30 days preceding the survey. Hand-hygiene compliance audit data was missing for 18 of 30 days, and two residents on the same hall developed facility-acquired respiratory infections during a documented staffing gap. The infection preventionist confirmed audits were deferred and not back-filled.",
+  },
+  {
+    ftag: "F0656",
+    severity: "Actual harm",
+    residentsAffected: "Some",
+    narrative:
+      "Comprehensive care plan for Resident #R412 did not include interventions for the resident's documented pain and fall-risk diagnoses. IDT minutes noted both were discussed on 2026-05-20 but no plan revision occurred; the resident sustained an unwitnessed fall on 2026-05-28.",
+  },
+  {
+    ftag: "F0725",
+    severity: "Actual harm",
+    residentsAffected: "Some",
+    narrative:
+      "Nurse-staffing records for the 14 days preceding the survey showed posted RN coverage was not met on 5 of 14 night shifts. The DON confirmed two open RN positions; agency coverage did not fill the gap, and call-light response times exceeded facility policy on the affected shifts.",
+  },
+  {
+    ftag: "F0689",
+    severity: "Minimal harm or potential for actual harm",
+    residentsAffected: "Few",
+    narrative:
+      "Surveyor observed an unattended housekeeping cart in the central hallway containing a labeled bottle of disinfectant accessible to ambulatory residents. The housekeeping supervisor confirmed the cart should not be left unattended when residents are present.",
+  },
+];
+
+const RECENT_PROFILES: BuildOpts[] = [
+  { daysBack: 2,  biasOpen: true,  scriptedDeficiencies: FLEMING_HERO_DEFICIENCIES, forcePocStatus: "draft pending review" },
+  { daysBack: 4,  biasOpen: true },
+  { daysBack: 9,  biasOpen: true,  forceWorstSeverity: "Immediate jeopardy" },
+  { daysBack: 14, biasOpen: true },
+  { daysBack: 21, biasOpen: true },
 ];
 
 const _recent: Survey[] = RECENT_PROFILES.map((p, i) =>
@@ -343,6 +451,18 @@ const _surveys: Survey[] = [..._historical, ..._recent];
 const recentFleming = _recent.find((s) => s.facilityId === "fleming-island");
 if (recentFleming) {
   recentFleming.pdfPath = "/samples/fleming-island-f0677.pdf";
+  // Pre-seed one completed corrective action with an evidence trail so the
+  // tracking story ("done since the survey, logged by the DON") shows live —
+  // even though the rest of this fresh draft is still "not started".
+  const base = new Date(recentFleming.surveyDate);
+  const walk = recentFleming.pocActivities.find((a) => a.citation.exemplarFtag === "F0689");
+  if (walk) {
+    walk.status = "complete";
+    walk.evidence = [0, 1].map((d) => ({
+      date: new Date(base.getTime() + d * 86_400_000).toISOString().slice(0, 10),
+      by: "Sarah Okafor, DON",
+    }));
+  }
 } else {
   const anyFleming = _surveys.find((s) => s.facilityId === "fleming-island");
   if (anyFleming) anyFleming.pdfPath = "/samples/fleming-island-f0677.pdf";
@@ -372,6 +492,62 @@ export function getSurvey(id: string): Survey | undefined {
 
 export function getFtag(code: string): FTag | undefined {
   return FTAGS.find((t) => t.code === code);
+}
+
+/** Plain-language clinical category for an F-tag (what DONs recognize). */
+export function categoryFor(code: string): string {
+  return getFtag(code)?.category ?? "Other";
+}
+
+// Points for ranking facilities by "heaviest" citations (regional triage).
+const SEVERITY_WEIGHT_POINTS: Record<Severity, number> = {
+  "Immediate jeopardy": 8,
+  "Actual harm": 4,
+  "Minimal harm or potential for actual harm": 2,
+  "No actual harm with potential for minimal harm": 1,
+};
+
+/** Severity-weighted citation score for a facility (higher = more enforcement risk). */
+export function facilitySeverityWeight(facilityId: string): number {
+  return SURVEYS.filter((s) => s.facilityId === facilityId)
+    .flatMap((s) => s.deficiencies)
+    .reduce((sum, d) => sum + SEVERITY_WEIGHT_POINTS[d.severity], 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Citation grouping — one deficiency joined to its corrective actions. This is
+// the unit the DON works: a clinical-category card with its own checklist.
+// (PocActivity.citation.exemplarFtag already equals the deficiency F-tag.)
+// ─────────────────────────────────────────────────────────────────────────────
+export type CitationGroup = {
+  surveyId: string;
+  ftag: string;
+  category: string;
+  severity: Severity;
+  scopeSeverity: string;
+  narrative: string;
+  activities: PocActivity[];
+};
+
+export function citationGroupsForSurvey(survey: Survey): CitationGroup[] {
+  return survey.deficiencies.map((d) => ({
+    surveyId: survey.id,
+    ftag: d.ftag,
+    category: categoryFor(d.ftag),
+    severity: d.severity,
+    scopeSeverity: d.scopeSeverity,
+    narrative: d.narrative,
+    activities: survey.pocActivities.filter((a) => a.citation.exemplarFtag === d.ftag),
+  }));
+}
+
+/** All citation groups for a facility's open (or all) surveys — the roadmap feed. */
+export function citationGroupsForFacility(facilityId: string, openOnly = true): CitationGroup[] {
+  return SURVEYS.filter(
+    (s) => s.facilityId === facilityId && (!openOnly || s.pocStatus !== "POC submitted"),
+  )
+    .sort((a, b) => new Date(b.surveyDate).getTime() - new Date(a.surveyDate).getTime())
+    .flatMap((s) => citationGroupsForSurvey(s));
 }
 
 export function surveysByFacility(facilityId: string): Survey[] {

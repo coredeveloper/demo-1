@@ -36,6 +36,8 @@ export const FTag = z.object({
   code: z.string(),
   title: z.string(),
   shortTitle: z.string(),
+  /** Plain-language clinical category — what DONs actually remember (not the F-tag code). */
+  category: z.string(),
 });
 export type FTag = z.infer<typeof FTag>;
 
@@ -44,13 +46,29 @@ export const Deficiency = z.object({
   severity: Severity,
   residentsAffected: ResidentsAffected,
   narrative: z.string(),
+  /** CMS scope-severity letter (A–L) derived from severity × residentsAffected. */
+  scopeSeverity: z.string(),
 });
 export type Deficiency = z.infer<typeof Deficiency>;
+
+export const PocActivityStatus = z.enum(["not started", "in progress", "complete"]);
+export type PocActivityStatus = z.infer<typeof PocActivityStatus>;
+
+/** One completion event on a corrective action — who did it and when. */
+export const PocEvidence = z.object({ date: z.string(), by: z.string() });
+export type PocEvidence = z.infer<typeof PocEvidence>;
 
 export const PocActivity = z.object({
   id: z.string(),
   text: z.string(),
   targetCompletionDate: z.string(),
+  /** Responsible role at the facility (e.g. "Infection Preventionist"). */
+  owner: z.string(),
+  /** Planned cadence (e.g. "One-time", "Daily ×30", "Every shift ×90d"). */
+  cadence: z.string(),
+  status: PocActivityStatus,
+  /** Actual completion audit trail — dates + performer. */
+  evidence: z.array(PocEvidence),
   citation: z.object({
     exemplarId: z.string(),
     exemplarFtag: z.string(),
