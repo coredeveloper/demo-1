@@ -1,5 +1,7 @@
 # dependencies
 /node_modules
+# pnpm project — npm lockfile must not be committed
+package-lock.json
 /.pnp
 .pnp.*
 .yarn/*
@@ -14,6 +16,9 @@
 # next.js
 /.next/
 /out/
+
+# generated demo artifacts (synthetic CMS-2567 PDFs)
+scripts/out/
 
 # production
 /build
