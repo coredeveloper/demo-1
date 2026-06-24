@@ -255,3 +255,25 @@ export function mockPocActivities(
   }
   return activities;
 }
+
+/**
+ * Corrective steps for an F-tag, independent of any survey — used by the
+ * /api/poc-draft endpoint the Teams agent calls for next-step recommendations.
+ * Same templates that ground the in-app POC, so Teams and the web demo agree.
+ */
+export function pocStepsForFtag(ftag: string): {
+  text: string;
+  owner: string;
+  cadence: string;
+  exemplarId: string;
+  quote: string;
+}[] {
+  const templates = TEMPLATES[ftag] ?? GENERIC_TEMPLATE;
+  return templates.map((t) => ({
+    text: t.text,
+    owner: t.owner,
+    cadence: t.cadence,
+    exemplarId: t.citation.exemplarId,
+    quote: t.citation.quote,
+  }));
+}
