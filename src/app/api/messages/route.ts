@@ -15,7 +15,14 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { buildAgent } from "@/lib/agent/agent";
-import { appendThread, loadThread, teamsThreadKey, toModelMessages } from "@/lib/agent/memory";
+import {
+  appendThread,
+  loadThread,
+  resolvePairCode,
+  resolveTeamsThreadKey,
+  savePairing,
+  toModelMessages,
+} from "@/lib/agent/memory";
 import { validateTeamsRequest } from "@/lib/teams/validate";
 import { teamsSkipAuth } from "@/lib/teams/skip-auth";
 import { sendActivity, stripChartFences, TeamsStreamer } from "@/lib/teams/connector";
@@ -43,6 +50,8 @@ const WELCOME = [
   "- _Draft a POC for F0880_",
   "- _Which states have the highest survey citation risk?_",
   "- _Break down operating margin by service line_",
+  "",
+  "_Tip: in the dashboard's assistant, choose **Pair with Teams** and send me the code — your web and Teams chats become one conversation._",
 ].join("\n");
 
 /**
@@ -97,12 +106,37 @@ async function handleMessage(activity: TeamsActivity) {
     return;
   }
 
+  // `pair <code>` — deterministic command, no LLM: links this Teams user to a
+  // web-dock browser so both surfaces share one conversation thread.
+  const pairMatch = text.match(/^pair\s+([a-zA-Z0-9]{6})$/i);
+  if (pairMatch) {
+    const webId = await resolvePairCode(pairMatch[1]);
+    if (!webId) {
+      await streamer.finish(
+        "That pairing code isn't valid anymore — codes are single-use and expire after 10 minutes. Generate a fresh one from the dashboard's assistant and try again.",
+      );
+      return;
+    }
+    await savePairing(
+      activity.from?.aadObjectId ?? activity.from?.id ?? "anonymous",
+      webId,
+      activity.from?.name,
+    );
+    await streamer.finish(
+      "✅ **Linked.** Your web dashboard chat and this Teams chat are now one conversation — ask here, continue there, and back.",
+    );
+    return;
+  }
+
   try {
     const agent = buildAgent("teams", activity.from?.aadObjectId ?? activity.from?.id);
 
-    // Cross-surface memory: same thread store the web dock uses, keyed by the
-    // sender's AAD id (mapped to the shared demo thread when configured).
-    const threadKey = teamsThreadKey(activity.from?.aadObjectId, activity.from?.id);
+    // Cross-surface memory: the paired web thread when one exists, else this
+    // Teams user's own thread — context is split per user.
+    const threadKey = await resolveTeamsThreadKey(
+      activity.from?.aadObjectId,
+      activity.from?.id,
+    );
     const history = await loadThread(threadKey);
     const result = await agent.stream({
       messages: [...toModelMessages(history), { role: "user", content: text }],

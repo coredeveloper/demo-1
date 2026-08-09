@@ -1,19 +1,21 @@
 /*
- * Cross-surface conversation memory — the "holistic chat" piece.
+ * Cross-surface conversation memory + user pairing — the "holistic chat".
  *
- * One thread key = one conversation, whichever surface it happens on: the web
- * AgentDock uses "demo-user"; Teams uses the caller's AAD object id (mapped to
- * "demo-user" when it matches DEMO_USER_AAD_ID, so the presenter's Teams chat
- * and web dock share one thread).
+ * Identity model (context is split per user):
+ *   - Web: each browser mints a persistent anonymous id → thread `web-<id>`.
+ *   - Teams: each sender is keyed by AAD object id → thread `teams-<aad>`.
+ *   - Pairing joins them: the dock issues a short-lived code (/api/pair); the
+ *     user sends `pair <code>` to the Teams bot; from then on that Teams user
+ *     resolves to the SAME `web-<id>` thread — one conversation, two surfaces.
  *
- * Backend: Vercel Blob (private store) when BLOB_READ_WRITE_TOKEN is present;
- * otherwise a per-instance in-memory fallback so nothing breaks before the
- * store is linked. Blob paths are HMAC-style hashes so keys aren't guessable.
- * Memory is an enhancement — every failure degrades to "no history", never to
- * a failed answer.
+ * Backend: Vercel Blob (linked private store — SDK resolves OIDC via
+ * BLOB_STORE_ID automatically; explicit BLOB_READ_WRITE_TOKEN also supported),
+ * with a per-instance in-memory fallback. Paths are salted hashes so keys
+ * aren't guessable. Memory is an enhancement — every failure degrades to
+ * "no history", never to a failed answer.
  */
-import { createHash } from "node:crypto";
-import { get, put } from "@vercel/blob";
+import { createHash, randomInt } from "node:crypto";
+import { del, get, put } from "@vercel/blob";
 import type { ModelMessage } from "ai";
 
 export type StoredMsg = {
@@ -24,47 +26,42 @@ export type StoredMsg = {
 };
 
 const CAP = 20;
-const localFallback = new Map<string, StoredMsg[]>();
+const PAIR_TTL_MS = 10 * 60_000;
 
-// Two auth modes: explicit RW token, or (linked private store) the SDK's
-// automatic OIDC + BLOB_STORE_ID resolution — pass no token in that case.
 const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
 const blobAvailable = () => Boolean(blobToken() || process.env.BLOB_STORE_ID);
 const authOpts = () => (blobToken() ? { token: blobToken()! } : {});
 
-function threadPath(threadKey: string): string {
+/* ── low-level JSON blob helpers (with local fallback) ─────────────── */
+
+const localKV = new Map<string, unknown>();
+
+function hashed(prefix: string, key: string): string {
   const salt = process.env.BOT_CLIENT_SECRET ?? "ph-demo-salt";
-  const hash = createHash("sha256").update(`${threadKey}:${salt}`).digest("hex").slice(0, 32);
-  return `chat/${hash}.json`;
+  const hash = createHash("sha256").update(`${prefix}:${key}:${salt}`).digest("hex").slice(0, 32);
+  return `${prefix}/${hash}.json`;
 }
 
-export async function loadThread(threadKey: string): Promise<StoredMsg[]> {
-  if (!blobAvailable()) return localFallback.get(threadKey) ?? [];
+async function readJson<T>(path: string): Promise<T | null> {
+  if (!blobAvailable()) return (localKV.get(path) as T) ?? null;
   try {
     // useCache:false — cross-surface continuity needs the latest write, not CDN.
-    const res = await get(threadPath(threadKey), {
-      access: "private",
-      useCache: false,
-      ...authOpts(),
-    });
-    if (!res || res.statusCode !== 200 || !res.stream) return [];
-    const parsed = (await new Response(res.stream).json()) as { messages?: StoredMsg[] };
-    return Array.isArray(parsed.messages) ? parsed.messages : [];
+    const res = await get(path, { access: "private", useCache: false, ...authOpts() });
+    if (!res || res.statusCode !== 200 || !res.stream) return null;
+    return (await new Response(res.stream).json()) as T;
   } catch (e) {
-    console.error("memory load failed:", e);
-    return [];
+    console.error(`blob read failed (${path}):`, e);
+    return null;
   }
 }
 
-export async function appendThread(threadKey: string, msgs: StoredMsg[]): Promise<void> {
+async function writeJson(path: string, value: unknown): Promise<void> {
+  if (!blobAvailable()) {
+    localKV.set(path, value);
+    return;
+  }
   try {
-    const existing = await loadThread(threadKey);
-    const next = [...existing, ...msgs].slice(-CAP);
-    if (!blobAvailable()) {
-      localFallback.set(threadKey, next);
-      return;
-    }
-    await put(threadPath(threadKey), JSON.stringify({ messages: next }), {
+    await put(path, JSON.stringify(value), {
       access: "private",
       contentType: "application/json",
       addRandomSuffix: false,
@@ -72,19 +69,94 @@ export async function appendThread(threadKey: string, msgs: StoredMsg[]): Promis
       ...authOpts(),
     });
   } catch (e) {
-    console.error("memory append failed:", e);
+    console.error(`blob write failed (${path}):`, e);
   }
+}
+
+async function deleteJson(path: string): Promise<void> {
+  if (!blobAvailable()) {
+    localKV.delete(path);
+    return;
+  }
+  try {
+    await del(path, authOpts());
+  } catch {
+    /* expiry still guards single-use codes */
+  }
+}
+
+/* ── conversation threads ──────────────────────────────────────────── */
+
+export async function loadThread(threadKey: string): Promise<StoredMsg[]> {
+  const parsed = await readJson<{ messages?: StoredMsg[] }>(hashed("chat", threadKey));
+  return Array.isArray(parsed?.messages) ? parsed.messages : [];
+}
+
+export async function appendThread(threadKey: string, msgs: StoredMsg[]): Promise<void> {
+  const existing = await loadThread(threadKey);
+  await writeJson(hashed("chat", threadKey), {
+    messages: [...existing, ...msgs].slice(-CAP),
+  });
 }
 
 export function toModelMessages(stored: StoredMsg[]): ModelMessage[] {
   return stored.map((m) => ({ role: m.role, content: m.text }));
 }
 
-/** Thread key for a Teams sender; joins the presenter's web thread when mapped. */
-export function teamsThreadKey(aadObjectId?: string, fallbackId?: string): string {
+/* ── pairing: web browser ↔ Teams user ─────────────────────────────── */
+
+type PairCode = { webId: string; expiresAt: number };
+type TeamsMapping = { webId: string; pairedAt: number };
+type WebPairInfo = { teamsName: string; pairedAt: number };
+
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no easy-to-confuse chars
+
+export async function createPairCode(webId: string): Promise<{ code: string; ttlSeconds: number }> {
+  let code = "";
+  for (let i = 0; i < 6; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  await writeJson(hashed("pair", code), {
+    webId,
+    expiresAt: Date.now() + PAIR_TTL_MS,
+  } satisfies PairCode);
+  return { code, ttlSeconds: PAIR_TTL_MS / 1000 };
+}
+
+/** Resolve and consume a pairing code (single-use, 10-minute expiry). */
+export async function resolvePairCode(code: string): Promise<string | null> {
+  const path = hashed("pair", code.toUpperCase());
+  const entry = await readJson<PairCode>(path);
+  if (!entry) return null;
+  await deleteJson(path);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.webId;
+}
+
+export async function savePairing(
+  teamsUserId: string,
+  webId: string,
+  teamsName?: string,
+): Promise<void> {
+  await writeJson(hashed("map", teamsUserId), {
+    webId,
+    pairedAt: Date.now(),
+  } satisfies TeamsMapping);
+  await writeJson(hashed("rmap", webId), {
+    teamsName: teamsName ?? "Teams user",
+    pairedAt: Date.now(),
+  } satisfies WebPairInfo);
+}
+
+/** What the dock shows once its browser id has been paired from Teams. */
+export async function getPairInfoForWeb(webId: string): Promise<WebPairInfo | null> {
+  return readJson<WebPairInfo>(hashed("rmap", webId));
+}
+
+/** Thread key for a Teams sender — the paired web thread when one exists. */
+export async function resolveTeamsThreadKey(
+  aadObjectId?: string,
+  fallbackId?: string,
+): Promise<string> {
   const id = aadObjectId ?? fallbackId ?? "anonymous";
-  if (process.env.DEMO_USER_AAD_ID && aadObjectId === process.env.DEMO_USER_AAD_ID) {
-    return "demo-user";
-  }
-  return `teams-${id}`;
+  const mapping = await readJson<TeamsMapping>(hashed("map", id));
+  return mapping?.webId ? `web-${mapping.webId}` : `teams-${id}`;
 }

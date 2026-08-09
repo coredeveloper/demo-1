@@ -2,29 +2,32 @@
 
 /*
  * AgentDock — LIVE. The same brain as Microsoft Teams: useChat → /api/agent
- * (all 12 tools, cite-or-refuse), with the shared "demo-user" thread so a
- * conversation started here continues in Teams and vice versa. Renders
- * markdown-lite, ```chart fences (recharts), and source chips from the actual
- * tool calls the agent made.
+ * (all 12 tools, cite-or-refuse). Renders markdown-lite, ```chart fences
+ * (recharts), and source chips from the actual tool calls.
+ *
+ * Identity & context: each browser mints a persistent anonymous id, so every
+ * user gets their own conversation thread (`web-<id>`). "Pair with Teams"
+ * issues a one-time code (/api/pair); sending `pair <code>` to the Teams bot
+ * joins that user's Teams chat to this browser's thread — one conversation,
+ * two surfaces.
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
-import { ExternalLink, Send, Sparkles, X } from "lucide-react";
+import { Check, ExternalLink, Link2, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChartBlock, parseChartSpec } from "./chart-block";
 import { useFinPersona } from "./persona-provider";
 
-/** One shared demo thread — Teams joins it via DEMO_USER_AAD_ID mapping. */
-const THREAD_KEY = "demo-user";
+const WEB_ID_KEY = "ph-web-user";
 
 const TEAMS_DEEP_LINK =
   "https://teams.microsoft.com/l/app/703068f7-78d7-473f-b034-77372733f29a?installAppPackage=true&appTenantId=ba03bbbe-35f5-4256-bef1-449f583b3311";
 
 const SEED =
-  "I'm the PruittHealth AI Insight Assistant. I answer from the platform's finance and survey data and cite every source — or I refuse if I can't ground the answer. Same brain as the Teams bot — this conversation continues there.";
+  "I'm the PruittHealth AI Insight Assistant. I answer from the platform's finance and survey data and cite every source — or I refuse if I can't ground the answer. Same brain as the Teams bot — pair the two and this conversation continues there.";
 
 const SUGGESTIONS = [
   "Chart operating margin by service line",
@@ -40,7 +43,30 @@ const MODE_BY_PATH: [string, string][] = [
   ["/financial/platform", "Admin"],
 ];
 
+function useWebId(): string | null {
+  const [webId, setWebId] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      let id = window.localStorage.getItem(WEB_ID_KEY);
+      if (!id) {
+        id = crypto.randomUUID();
+        window.localStorage.setItem(WEB_ID_KEY, id);
+      }
+      setWebId(id);
+    } catch {
+      setWebId(crypto.randomUUID()); // private mode: per-tab identity
+    }
+  }, []);
+  return webId;
+}
+
 export function AgentDock() {
+  const webId = useWebId();
+  if (!webId) return null;
+  return <Dock webId={webId} />;
+}
+
+function Dock({ webId }: { webId: string }) {
   const { persona } = useFinPersona();
   const path = usePathname();
   const [open, setOpen] = useState(false);
@@ -49,8 +75,12 @@ export function AgentDock() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/agent", body: { threadKey: THREAD_KEY } }),
-    [],
+    () =>
+      new DefaultChatTransport({
+        api: "/api/agent",
+        body: { threadKey: `web-${webId}` },
+      }),
+    [webId],
   );
   const { messages, sendMessage, status } = useChat({ transport });
   const busy = status === "submitted" || status === "streaming";
@@ -126,10 +156,10 @@ export function AgentDock() {
             href={TEAMS_DEEP_LINK}
             target="_blank"
             rel="noreferrer"
-            title="Same conversation, in Microsoft Teams"
+            title="Open the bot in Microsoft Teams"
             className="inline-flex items-center gap-1 rounded-md border border-ph-gray-200 px-2 py-1 text-[10.5px] font-medium text-ph-gray-700 hover:border-ph-primary hover:text-ph-primary"
           >
-            Continue in Teams <ExternalLink className="h-3 w-3" />
+            Teams <ExternalLink className="h-3 w-3" />
           </a>
           <button
             type="button"
@@ -165,6 +195,7 @@ export function AgentDock() {
         </div>
 
         <div className="border-t border-ph-gray-200 px-4 pt-3 pb-4">
+          <PairRow webId={webId} dockOpen={open} />
           <div className="mb-2.5 flex flex-wrap gap-1.5">
             {SUGGESTIONS.map((s) => (
               <button
@@ -205,11 +236,90 @@ export function AgentDock() {
           </div>
           <p className="mt-2 text-[10px] leading-snug text-ph-gray-400">
             Every reply cites sources &amp; refresh metadata · interactions are audit-logged · demo
-            data is illustrative
+            data is illustrative · your context is private to this browser until you pair it
           </p>
         </div>
       </aside>
     </>
+  );
+}
+
+/* ── pairing row: link this browser's thread to a Teams user ───────── */
+
+function PairRow({ webId, dockOpen }: { webId: string; dockOpen: boolean }) {
+  const [paired, setPaired] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+
+  // Check pairing state when the dock opens; poll while a code is showing.
+  useEffect(() => {
+    if (!dockOpen) return;
+    let stop = false;
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/pair?webId=${encodeURIComponent(webId)}`);
+        const json = (await res.json()) as { paired: boolean; teamsName?: string };
+        if (!stop && json.paired) {
+          setPaired(json.teamsName ?? "Teams");
+          setCode(null);
+        }
+      } catch {
+        /* transient */
+      }
+    };
+    void check();
+    const timer = code && !paired ? setInterval(check, 4000) : null;
+    return () => {
+      stop = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [dockOpen, code, paired, webId]);
+
+  const requestCode = async () => {
+    setRequesting(true);
+    try {
+      const res = await fetch("/api/pair", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ webId }),
+      });
+      const json = (await res.json()) as { code?: string };
+      if (json.code) setCode(json.code);
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  if (paired) {
+    return (
+      <div className="mb-2.5 flex items-center gap-1.5 text-[10.5px] text-[#2E7D5B]">
+        <Check className="h-3 w-3" /> Linked to <strong>{paired}</strong> in Teams — one
+        conversation across both.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-2.5 flex flex-wrap items-center gap-2 text-[10.5px] text-ph-gray-500">
+      {code ? (
+        <>
+          In Teams, send the bot:{" "}
+          <code className="rounded bg-ph-primary-soft px-1.5 py-0.5 font-semibold text-ph-primary">
+            pair {code}
+          </code>
+          <span className="text-ph-gray-400">(single-use · expires in 10 min)</span>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={requestCode}
+          disabled={requesting}
+          className="inline-flex items-center gap-1 rounded-md border border-ph-gray-200 px-2 py-1 font-medium text-ph-gray-700 hover:border-ph-primary hover:text-ph-primary disabled:opacity-50"
+        >
+          <Link2 className="h-3 w-3" /> Pair with Teams
+        </button>
+      )}
+    </div>
   );
 }
 
