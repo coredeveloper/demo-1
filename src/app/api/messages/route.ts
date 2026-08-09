@@ -15,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { buildAgent } from "@/lib/agent/agent";
+import { appendThread, loadThread, teamsThreadKey, toModelMessages } from "@/lib/agent/memory";
 import { validateTeamsRequest } from "@/lib/teams/validate";
 import { teamsSkipAuth } from "@/lib/teams/skip-auth";
 import { sendActivity, stripChartFences, TeamsStreamer } from "@/lib/teams/connector";
@@ -95,7 +96,14 @@ async function handleMessage(activity: TeamsActivity) {
 
   try {
     const agent = buildAgent("teams", activity.from?.aadObjectId ?? activity.from?.id);
-    const result = await agent.stream({ prompt: text });
+
+    // Cross-surface memory: same thread store the web dock uses, keyed by the
+    // sender's AAD id (mapped to the shared demo thread when configured).
+    const threadKey = teamsThreadKey(activity.from?.aadObjectId, activity.from?.id);
+    const history = await loadThread(threadKey);
+    const result = await agent.stream({
+      messages: [...toModelMessages(history), { role: "user", content: text }],
+    });
 
     // Iterate fullStream, not textStream: model/gateway errors arrive as
     // {type:'error'} parts and never reject the stream — textStream would
@@ -109,7 +117,13 @@ async function handleMessage(activity: TeamsActivity) {
         throw part.error instanceof Error ? part.error : new Error(String(part.error));
       }
     }
-    await streamer.finish(stripChartFences(full));
+    const finalText = stripChartFences(full);
+    await streamer.finish(finalText);
+    const now = Date.now();
+    await appendThread(threadKey, [
+      { role: "user", text, surface: "teams", at: now },
+      { role: "assistant", text: finalText, surface: "teams", at: now },
+    ]);
   } catch (e) {
     console.error("agent run failed:", e);
     // Generic reply — full detail stays in the server logs (Vercel → Functions).

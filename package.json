@@ -10,6 +10,7 @@
     "gen:pdfs": "tsx scripts/gen-2567-pdfs.ts"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.61",
     "@radix-ui/react-collapsible": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-scroll-area": "^1.2.2",
@@ -17,6 +18,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "@vercel/blob": "^2.7.0",
     "@vercel/functions": "^3.9.1",
     "ai": "^7.0.58",
     "class-variance-authority": "^0.7.1",
