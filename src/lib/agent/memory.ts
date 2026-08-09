@@ -26,7 +26,11 @@ export type StoredMsg = {
 const CAP = 20;
 const localFallback = new Map<string, StoredMsg[]>();
 
+// Two auth modes: explicit RW token, or (linked private store) the SDK's
+// automatic OIDC + BLOB_STORE_ID resolution — pass no token in that case.
 const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
+const blobAvailable = () => Boolean(blobToken() || process.env.BLOB_STORE_ID);
+const authOpts = () => (blobToken() ? { token: blobToken()! } : {});
 
 function threadPath(threadKey: string): string {
   const salt = process.env.BOT_CLIENT_SECRET ?? "ph-demo-salt";
@@ -35,11 +39,14 @@ function threadPath(threadKey: string): string {
 }
 
 export async function loadThread(threadKey: string): Promise<StoredMsg[]> {
-  const token = blobToken();
-  if (!token) return localFallback.get(threadKey) ?? [];
+  if (!blobAvailable()) return localFallback.get(threadKey) ?? [];
   try {
     // useCache:false — cross-surface continuity needs the latest write, not CDN.
-    const res = await get(threadPath(threadKey), { token, access: "private", useCache: false });
+    const res = await get(threadPath(threadKey), {
+      access: "private",
+      useCache: false,
+      ...authOpts(),
+    });
     if (!res || res.statusCode !== 200 || !res.stream) return [];
     const parsed = (await new Response(res.stream).json()) as { messages?: StoredMsg[] };
     return Array.isArray(parsed.messages) ? parsed.messages : [];
@@ -53,17 +60,16 @@ export async function appendThread(threadKey: string, msgs: StoredMsg[]): Promis
   try {
     const existing = await loadThread(threadKey);
     const next = [...existing, ...msgs].slice(-CAP);
-    const token = blobToken();
-    if (!token) {
+    if (!blobAvailable()) {
       localFallback.set(threadKey, next);
       return;
     }
     await put(threadPath(threadKey), JSON.stringify({ messages: next }), {
       access: "private",
-      token,
       contentType: "application/json",
       addRandomSuffix: false,
       allowOverwrite: true,
+      ...authOpts(),
     });
   } catch (e) {
     console.error("memory append failed:", e);
