@@ -6,6 +6,7 @@
  * auto-redirect when a persona loses access to the current view.
  */
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
@@ -78,12 +79,30 @@ export function FinChrome({ children }: { children: React.ReactNode }) {
   }, [persona, current, router]);
 
   return (
-    <div className="px-6 py-6 md:px-8 flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto">
-          <div className="ph-eyebrow">AI Command Center · demo</div>
-          <h1 className="text-2xl leading-tight">Financial Insights &amp; Survey Intelligence</h1>
-        </div>
+    <div className="mx-auto max-w-[1560px] px-6 py-5 md:px-8 flex flex-col gap-5">
+      {/* Independent app header — the Financial app does NOT share the survey
+          suite's sidebar. Cross-over is one discreet link, nothing more. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-ph-gray-200 pb-4">
+        <Link href="/financial" className="inline-flex items-center gap-3">
+          <Image
+            src="/pruitthealth-logo.png"
+            alt="PruittHealth"
+            width={150}
+            height={42}
+            priority
+            className="h-9 w-auto"
+          />
+          <span className="h-8 w-px bg-ph-gray-200" aria-hidden />
+          <span>
+            <span className="block font-display text-lg leading-tight text-ph-ink">
+              AI Command Center
+            </span>
+            <span className="block text-[10.5px] text-ph-gray-500">
+              Financial Insights &amp; Survey Intelligence · Microsoft-native · demo
+            </span>
+          </span>
+        </Link>
+        <span className="mr-auto" />
         <PersonaMenu personaKey={personaKey} setPersona={setPersona} />
         <span className="rounded-full border border-ph-gray-200 bg-ph-paper px-3 py-1.5 text-xs text-ph-gray-700">
           {persona.scopeChip}
@@ -97,6 +116,12 @@ export function FinChrome({ children }: { children: React.ReactNode }) {
             {alertCount}
           </span>
         </span>
+        <Link
+          href="/"
+          className="text-[11px] text-ph-gray-400 hover:text-ph-primary hover:underline"
+        >
+          Survey suite →
+        </Link>
       </div>
 
       <nav className="flex flex-wrap items-center gap-1 border-b border-ph-gray-200 -mb-1">

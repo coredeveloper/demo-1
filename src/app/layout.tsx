@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import { Public_Sans, Fraunces, JetBrains_Mono } from "next/font/google";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
 import { DemoBanner } from "@/components/layout/demo-banner";
-import { PageFooter } from "@/components/layout/page-footer";
-import { PersonaProvider } from "@/components/layout/persona-context";
 import "./globals.css";
 
 const publicSans = Public_Sans({
@@ -32,11 +28,17 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "State Survey Automation · PruittHealth",
+  title: "PruittHealth · AI Demos",
   description:
-    "Local prototype — turns CMS-2567 PDFs into FHIR R4 resources and AI-drafted Plans of Correction.",
+    "Demo prototypes — State Survey Automation and the AI Command Center (Financial Insights & Survey Intelligence).",
 };
 
+/**
+ * Root layout carries only fonts, global styles, and the demo banner.
+ * Each app surface brings its own shell: the survey suite's sidebar lives in
+ * (survey)/layout.tsx; the Financial AI Command Center's independent chrome
+ * lives in financial/layout.tsx.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -47,16 +49,7 @@ export default function RootLayout({
     >
       <body className="bg-ph-gray-50 text-ph-ink">
         <DemoBanner />
-        <PersonaProvider>
-          <div className="grid min-h-[calc(100vh-28px)] grid-cols-[260px_1fr]">
-            <Sidebar />
-            <div className="flex flex-col">
-              <Header />
-              <main className="flex-1">{children}</main>
-              <PageFooter />
-            </div>
-          </div>
-        </PersonaProvider>
+        {children}
       </body>
     </html>
   );
