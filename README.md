@@ -26,14 +26,27 @@ App opens at **http://localhost:3000** (or :3001 if 3000 is busy).
 | `/pipeline` | The marquee — animated 4-step ingestion of the Fleming Island sample (Document Intelligence → Content Understanding → FHIR Bundle → drafted POC) |
 | `/poc-review` | Compliance review queue: pick a draft, accept/reject/export to Word |
 
+## The agentic layer (real LLM, added Aug 2026)
+
+One `ToolLoopAgent` (AI SDK v7, model via **Vercel AI Gateway** — default `anthropic/claude-sonnet-5`, swap with `AGENT_MODEL`) exposes **both demo domains as tools**: the survey dataset (`list_surveys`, `search_surveys`, `get_survey`, `get_facility`, `survey_stats`, `draft_poc`) and the financial dataset ported from the vendor package (`get_portfolio_summary`, `get_state_summary`, `get_service_line_benchmarks`, `get_citation_taxonomy`, `get_location`, `search_locations` over `src/lib/financial-data.json`).
+
+| Surface | Endpoint | Notes |
+|---|---|---|
+| Web | `POST /api/agent` | AI SDK UI message stream (useChat-compatible); accepts plain `{role, content}` messages for curl |
+| Microsoft Teams | `POST /api/messages` | Bot messaging endpoint: JWT validation → 200 ack in ms → agent runs via `waitUntil` → streamed reply through the Bot Connector (1:1 chats) |
+| Copilot Studio | `POST /api/poc-draft` | Template-based POC steps (no LLM); shares `src/lib/poc-draft.ts` with the agent's `draft_poc` tool |
+
+**Env** — Gateway auth is automatic on Vercel (OIDC); locally run `vercel env pull .env.local`. Teams needs `BOT_CLIENT_ID`, `BOT_CLIENT_SECRET`, `BOT_TENANT_ID` (from `teams app create --endpoint https://<host>/api/messages`); until they're set, `/api/messages` answers `configured: false`. `TEAMS_SKIP_AUTH=1` (local only) enables Agents Playground testing: `agentsplayground -e http://localhost:3000/api/messages -c msteams`.
+
+Key files: `src/lib/agent/` (system prompt, both toolsets, agent) · `src/lib/teams/` (JWT validation, connector token, streamed replies).
+
 ## What's NOT in this prototype (held for the Azure-wired implementation)
 
 - ❌ No real Document Intelligence — the "extraction" panel reveals pre-staged JSON
-- ❌ No real LLM calls — POC drafts and NLQ answers are pre-canned
 - ❌ No real FHIR server — Bundles are constructed in-process by `src/lib/mock-fhir.ts`
-- ❌ No authentication — open localhost
+- ❌ No authentication on the web UI — open demo (the Teams surface authenticates via Bot Framework JWTs)
 - ❌ No database — mock data lives in memory; deterministic seed in `src/lib/mock-data.ts`
-- ❌ No production deploy — only `npm run dev` and `npm run build`
+- ⚠️ The `/trends` NLQ chat is still pre-canned (`src/lib/nlq-canned.ts`) — wiring it to `/api/agent` is the planned next step alongside the `/financial` dashboard
 
 ## Brand decisions
 

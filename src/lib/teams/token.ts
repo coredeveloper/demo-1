@@ -10,10 +10,12 @@
  * no credentials (the Playground's local Connector accepts anonymous posts).
  */
 
+import { teamsSkipAuth } from "./skip-auth";
+
 let cached: { token: string; expiresAt: number } | null = null;
 
 export async function connectorToken(): Promise<string | null> {
-  if (process.env.TEAMS_SKIP_AUTH === "1") return null;
+  if (teamsSkipAuth()) return null;
 
   if (cached && Date.now() < cached.expiresAt - 60_000) return cached.token;
 

@@ -68,6 +68,10 @@ export class TeamsStreamer {
     this.sending = true;
     this.lastSentAt = now;
     try {
+      // The opening chunk of a stream must carry streamSequence 1, so the
+      // sequence is committed only after a successful send — a failed first
+      // chunk would otherwise strand the stream (seq 2 with no streamId).
+      const seq = this.streamId ? this.seq : 1;
       const id = await sendActivity(this.serviceUrl, this.conversationId, {
         type: "typing",
         text: cumulativeText,
@@ -75,12 +79,13 @@ export class TeamsStreamer {
           {
             type: "streaminfo",
             streamType: "streaming",
-            streamSequence: this.seq++,
+            streamSequence: seq,
             ...(this.streamId ? { streamId: this.streamId } : {}),
           },
         ],
       });
       if (!this.streamId && id) this.streamId = id;
+      this.seq = seq + 1;
     } catch (e) {
       // Streaming is best-effort — the final message still lands.
       console.error("teams stream update failed:", e);
@@ -89,18 +94,29 @@ export class TeamsStreamer {
     }
   }
 
-  /** Send the final message (closes the stream when one was opened). */
+  /**
+   * Send the final message. The stream-closing post shares the ~1 rps
+   * streaming throttle, so wait out the remaining window first; if it still
+   * fails (429 race, expired stream past the 2-minute cap), the full text is
+   * re-sent as a plain message so the answer is never lost.
+   */
   async finish(finalText: string): Promise<void> {
     const text = finalText || "_(no response)_";
     if (this.personal && this.streamId) {
-      await sendActivity(this.serviceUrl, this.conversationId, {
-        type: "message",
-        text,
-        entities: [
-          { type: "streaminfo", streamType: "final", streamId: this.streamId },
-        ],
-      });
-      return;
+      const wait = STREAM_THROTTLE_MS - (Date.now() - this.lastSentAt);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      try {
+        await sendActivity(this.serviceUrl, this.conversationId, {
+          type: "message",
+          text,
+          entities: [
+            { type: "streaminfo", streamType: "final", streamId: this.streamId },
+          ],
+        });
+        return;
+      } catch (e) {
+        console.error("teams stream finish failed, falling back to plain message:", e);
+      }
     }
     await sendActivity(this.serviceUrl, this.conversationId, {
       type: "message",

@@ -134,10 +134,13 @@ export const financialTools = {
       const limit = input.limit || 12;
       const num = (f: FacilityRow) => f[metric] as number | null | undefined;
 
-      if (input.comparator === "above" && val != null)
-        results = results.filter(([, f]) => num(f) != null && (num(f) as number) > val);
-      if (input.comparator === "below" && val != null)
-        results = results.filter(([, f]) => num(f) != null && (num(f) as number) < val);
+      // Matches the original vendor semantics: 'above'/'below' without a
+      // value filters everything out (comparison with undefined is false),
+      // rather than silently returning unfiltered rows.
+      if (input.comparator === "above")
+        results = results.filter(([, f]) => num(f) != null && (num(f) as number) > (val as number));
+      if (input.comparator === "below")
+        results = results.filter(([, f]) => num(f) != null && (num(f) as number) < (val as number));
       if (input.comparator === "top")
         results = [...results]
           .filter(([, f]) => num(f) != null)

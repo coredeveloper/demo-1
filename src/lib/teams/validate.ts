@@ -45,6 +45,9 @@ export async function validateTeamsRequest(
   authHeader: string | null,
   activity: { serviceUrl?: string },
 ): Promise<ValidationResult> {
+  if (!process.env.BOT_CLIENT_ID) {
+    return { ok: false, reason: "BOT_CLIENT_ID is not configured" };
+  }
   if (!authHeader?.startsWith("Bearer ")) {
     return { ok: false, reason: "missing bearer token" };
   }
@@ -54,15 +57,20 @@ export async function validateTeamsRequest(
     const { payload } = await jwtVerify(token, await getJwks(), {
       issuer: ISSUER,
       audience: process.env.BOT_CLIENT_ID,
+      algorithms: ["RS256"],
       clockTolerance: 300,
     });
 
+    // Fail closed: the serviceUrl the reply will be POSTed to (with a bearer
+    // token attached) must be https and must match the signed claim.
     const claimUrl = payload.serviceurl as string | undefined;
-    if (
-      claimUrl &&
-      activity.serviceUrl &&
-      normalizeUrl(claimUrl) !== normalizeUrl(activity.serviceUrl)
-    ) {
+    if (!claimUrl || !activity.serviceUrl) {
+      return { ok: false, reason: "serviceUrl claim or activity.serviceUrl missing" };
+    }
+    if (!activity.serviceUrl.startsWith("https://")) {
+      return { ok: false, reason: "serviceUrl must be https" };
+    }
+    if (normalizeUrl(claimUrl) !== normalizeUrl(activity.serviceUrl)) {
       return { ok: false, reason: "serviceUrl claim mismatch" };
     }
     return { ok: true };
