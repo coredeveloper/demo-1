@@ -80,6 +80,9 @@ async function handleMessage(activity: TeamsActivity) {
   const personal = activity.conversation?.conversationType === "personal";
   const streamer = new TeamsStreamer(serviceUrl, conversationId, personal);
   const text = cleanText(activity);
+  // Surfaced in Vercel function logs so DEMO_USER_AAD_ID can be configured
+  // for cross-surface thread joining (see src/lib/agent/memory.ts).
+  console.log("teams sender:", activity.from?.name ?? "?", "aadObjectId:", activity.from?.aadObjectId ?? "(none)");
 
   if (!text) {
     // Card submits and attachment-only posts arrive with empty text — don't
