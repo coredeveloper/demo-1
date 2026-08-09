@@ -51,3 +51,6 @@ next-env.d.ts
 
 # claude / agent
 .claude/
+
+.vercel
+.env*
