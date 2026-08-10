@@ -22,9 +22,9 @@ export function fireToast(message: string) {
   window.dispatchEvent(new CustomEvent("ph-toast", { detail: message }));
 }
 
-/** Programmatically open the AgentDock (e.g. "Ask in Finance mode"). */
-export function openDock() {
-  window.dispatchEvent(new CustomEvent("ph-open-dock"));
+/** Programmatically open the AgentDock; an optional question is sent immediately. */
+export function openDock(question?: string) {
+  window.dispatchEvent(new CustomEvent("ph-open-dock", { detail: { question } }));
 }
 
 function Toaster() {

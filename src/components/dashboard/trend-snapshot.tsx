@@ -24,12 +24,14 @@ export function TrendSnapshot() {
           const t = getFtag(ftag);
           const pct = (count / max) * 100;
           return (
-            <div
+            <Link
               key={ftag}
-              className="ph-reveal flex items-center gap-3"
+              href="/trends"
+              title={t ? `${t.shortTitle} — open Trends` : "Open Trends"}
+              className="ph-reveal group flex items-center gap-3 -mx-2 rounded-md px-2 py-0.5 transition-colors hover:bg-ph-gray-50"
               style={{ animationDelay: `${300 + i * 50}ms` }}
             >
-              <span className="font-mono text-[11px] text-ph-gray-700 w-12 shrink-0">
+              <span className="font-mono text-[11px] text-ph-gray-700 group-hover:text-ph-primary w-12 shrink-0">
                 {ftag}
               </span>
               <div className="flex-1 h-1.5 bg-ph-gray-100 rounded-full overflow-hidden">
@@ -39,7 +41,7 @@ export function TrendSnapshot() {
                 />
               </div>
               <span className="text-xs text-ph-gray-500 w-8 text-right tabular-nums">{count}</span>
-            </div>
+            </Link>
           );
         })}
         <div className="text-[11px] text-ph-gray-400 italic mt-2">

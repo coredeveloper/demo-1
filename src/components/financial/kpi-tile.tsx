@@ -14,7 +14,16 @@ const DELTA_TONE: Record<string, string> = {
   neutral: "text-ph-gray-500",
 };
 
-export function KpiTile({ tile }: { tile: KpiTileData }) {
+export function KpiTile({
+  tile,
+  onSelect,
+  selected,
+}: {
+  tile: KpiTileData;
+  /** When set, the tile toggles an in-page breakdown instead of navigating. */
+  onSelect?: () => void;
+  selected?: boolean;
+}) {
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -38,7 +47,8 @@ export function KpiTile({ tile }: { tile: KpiTileData }) {
 
   const className = cn(
     "ph-card relative p-4 pl-5 flex flex-col overflow-hidden",
-    tile.drill && "transition-shadow hover:shadow-[var(--shadow-card-hover)]",
+    (tile.drill || onSelect) && "transition-shadow hover:shadow-[var(--shadow-card-hover)]",
+    selected && "ring-2 ring-ph-burgundy/40",
   );
   const rail = (
     <span
@@ -49,6 +59,20 @@ export function KpiTile({ tile }: { tile: KpiTileData }) {
   );
   const title = KPI_DEFS[tile.label];
 
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-expanded={selected}
+        className={cn(className, "cursor-pointer text-left")}
+        title={title}
+      >
+        {rail}
+        {body}
+      </button>
+    );
+  }
   if (tile.drill) {
     return (
       <Link href={tile.drill} className={className} title={title}>
@@ -65,12 +89,28 @@ export function KpiTile({ tile }: { tile: KpiTileData }) {
   );
 }
 
-export function KpiGrid({ tiles }: { tiles: KpiTileData[] }) {
+export function KpiGrid({
+  tiles,
+  expand,
+}: {
+  tiles: KpiTileData[];
+  /** The tile with this label toggles a breakdown instead of navigating. */
+  expand?: { label: string; open: boolean; onToggle: () => void };
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {tiles.map((t) => (
-        <KpiTile key={t.label + t.value} tile={t} />
-      ))}
+      {tiles.map((t) =>
+        expand && t.label === expand.label ? (
+          <KpiTile
+            key={t.label + t.value}
+            tile={t}
+            onSelect={expand.onToggle}
+            selected={expand.open}
+          />
+        ) : (
+          <KpiTile key={t.label + t.value} tile={t} />
+        ),
+      )}
     </div>
   );
 }

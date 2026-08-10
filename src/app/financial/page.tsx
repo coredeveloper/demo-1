@@ -2,10 +2,13 @@
 
 /*
  * /financial — Command Center. Persona-scoped executive briefing: AI narrative,
- * KPI tile grid (drill + glossary tooltips), exception cards, revenue/margin
- * trend, persona-ranked suggested actions, service-line benchmarks, roster.
+ * KPI tile grid (drill + glossary tooltips; the Operating Margin tile opens an
+ * in-page breakdown — the CEO click), exception cards, revenue/margin trend,
+ * persona-ranked suggested actions, service-line benchmarks, roster.
  */
+import { useState } from "react";
 import { useFinPersona } from "@/components/financial/persona-provider";
+import { MarginBreakdown } from "@/components/financial/margin-breakdown";
 import { NarrativeBanner } from "@/components/financial/narrative-banner";
 import { KpiGrid } from "@/components/financial/kpi-tile";
 import { ExceptionCard } from "@/components/financial/exception-card";
@@ -25,16 +28,32 @@ export default function CommandCenterPage() {
   const cc = persona.command;
   const trend = finVariant(persona.finScope).trend;
   const labels = enterpriseTrend().labels;
+  const [showMargin, setShowMargin] = useState(false);
+  const hasMarginTile = cc.kpis.some((t) => t.label === "Operating Margin");
 
   return (
     <div className="flex flex-col gap-6">
       <NarrativeBanner title={cc.title} body={cc.body} stats={cc.stats} />
 
-      <section>
+      <section className="flex flex-col gap-3">
         <SectionLabel hint="click a tile to drill · hover for plain-English definitions">
           {cc.kpiLabel}
         </SectionLabel>
-        <KpiGrid tiles={cc.kpis} />
+        <KpiGrid
+          tiles={cc.kpis}
+          expand={
+            hasMarginTile
+              ? {
+                  label: "Operating Margin",
+                  open: showMargin,
+                  onToggle: () => setShowMargin((s) => !s),
+                }
+              : undefined
+          }
+        />
+        {showMargin && hasMarginTile && (
+          <MarginBreakdown scope={persona.finScope} onClose={() => setShowMargin(false)} />
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

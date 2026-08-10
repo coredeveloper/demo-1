@@ -1,12 +1,54 @@
 import Link from "next/link";
 import { ArrowRight, Eye, ClipboardList, CheckCircle2 } from "lucide-react";
-import { KpiCard } from "@/components/dashboard/kpi-card";
+import { DashboardKpis, type IjItem, type IjRecurring } from "@/components/dashboard/dashboard-kpis";
 import { RecentSurveys } from "@/components/dashboard/recent-surveys";
 import { TrendSnapshot } from "@/components/dashboard/trend-snapshot";
-import { dashboardKpis, FACILITIES } from "@/lib/mock-data";
+import {
+  SURVEYS,
+  dashboardKpis,
+  ftagCountsByFacility,
+  getFacility,
+  getFtag,
+  FACILITIES,
+} from "@/lib/mock-data";
+import { pocStepsForFtag } from "@/lib/mock-poc";
+
+/** Open IJ citations with their "do today, by when" payload (server-computed). */
+function ijActionItems(): { items: IjItem[]; recurring: IjRecurring[] } {
+  const items: IjItem[] = SURVEYS.filter((s) => s.pocStatus !== "POC submitted")
+    .flatMap((s) =>
+      s.deficiencies
+        .filter((d) => d.severity === "Immediate jeopardy")
+        .map((d) => {
+          const f = getFacility(s.facilityId)!;
+          return {
+            surveyId: s.id,
+            facility: f.name,
+            state: f.state,
+            ftag: d.ftag,
+            title: getFtag(d.ftag)?.shortTitle ?? "",
+            grade: d.scopeSeverity,
+            dueDate: s.pocDueDate,
+            actions: pocStepsForFtag(d.ftag)
+              .slice(0, 3)
+              .map((a) => ({ text: a.text, owner: a.owner })),
+          };
+        }),
+    )
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  const byFacility = ftagCountsByFacility();
+  const recurring: IjRecurring[] = [...new Set(items.map((i) => i.ftag))].map((ftag) => ({
+    ftag,
+    title: getFtag(ftag)?.shortTitle ?? "",
+    facilities: [...byFacility.values()].filter((m) => (m.get(ftag) ?? 0) > 0).length,
+  }));
+  return { items, recurring };
+}
 
 export default function Home() {
   const k = dashboardKpis();
+  const { items: ijItems, recurring } = ijActionItems();
 
   return (
     <div className="px-10 pt-8 pb-16 max-w-[1500px]">
@@ -48,44 +90,10 @@ export default function Home() {
         <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-ph-primary" strokeWidth={1.6} /> Tracked to completion</span>
       </section>
 
-      {/* KPIs — asymmetric grid: 5-3-2-2 instead of 4 equal */}
-      <section className="grid grid-cols-12 gap-4 mb-10">
-        <div className="col-span-12 md:col-span-5">
-          <KpiCard
-            eyebrow="Open surveys"
-            value={k.openSurveys}
-            caption={`${k.dueThisWeek} due within 7 days. Real-time across the division.`}
-            emphasis="neutral"
-            delay={0}
-          />
-        </div>
-        <div className="col-span-12 md:col-span-3">
-          <KpiCard
-            eyebrow="POCs due ≤7d"
-            value={k.dueThisWeek}
-            caption="10-day regulatory window."
-            emphasis={k.dueThisWeek > 0 ? "warning" : "neutral"}
-            delay={80}
-          />
-        </div>
-        <div className="col-span-6 md:col-span-2">
-          <KpiCard
-            eyebrow="Total deficiencies"
-            value={k.totalDeficiencies}
-            caption="Trailing 12 months."
-            delay={160}
-          />
-        </div>
-        <div className="col-span-6 md:col-span-2">
-          <KpiCard
-            eyebrow="Immediate jeopardy"
-            value={k.immediateJeopardy}
-            caption="Highest severity tier."
-            emphasis={k.immediateJeopardy > 0 ? "critical" : "neutral"}
-            delay={240}
-          />
-        </div>
-      </section>
+      {/* KPIs — asymmetric grid; IJ card expands the in-page action plan. */}
+      <div className="mb-6">
+        <DashboardKpis kpis={k} ijItems={ijItems} recurring={recurring} />
+      </div>
 
       {/* Body — asymmetric 8/4 split */}
       <section className="grid grid-cols-12 gap-6">

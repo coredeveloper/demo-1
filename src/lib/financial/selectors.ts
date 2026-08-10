@@ -7,7 +7,7 @@
  * dataset's own aggregates.
  */
 import raw from "@/lib/financial-data.json";
-import type { RosterRow } from "./types";
+import type { FinScope, RosterRow } from "./types";
 
 type FacilityRow = {
   name: string;
@@ -170,6 +170,25 @@ function toRosterRow(f: FacilityRow): RosterRow {
     status: st.label,
     pill: st.pill,
   };
+}
+
+/** Worst operating margins in scope — the "facilities to tackle today" list. */
+export function worstByMargin(scope: FinScope, n = 5) {
+  let rows = Object.values(DATA.facilities);
+  if (scope === "md") rows = rows.filter((f) => f.state === "MD");
+  if (scope === "chesapeake") rows = rows.filter((f) => f.name.includes("Chesapeake"));
+  return [...rows]
+    .sort((a, b) => a.operating_margin_pct - b.operating_margin_pct)
+    .slice(0, n)
+    .map((f) => ({
+      name: shortName(f),
+      city: f.city,
+      state: f.state,
+      margin: f.operating_margin_pct,
+      labor: f.labor_pct,
+      agency: f.agency_pct,
+      occ: f.occupancy_pct,
+    }));
 }
 
 /** Roster sample: all Maryland locations + the story anchors, from the dataset. */

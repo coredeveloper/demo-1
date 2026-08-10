@@ -99,13 +99,19 @@ function Dock({ webId }: { webId: string }) {
   }, [open]);
 
   useEffect(() => {
-    const onOpen = () => {
+    const onOpen = (e: Event) => {
       setOpen(true);
+      const question = (e as CustomEvent<{ question?: string }>).detail?.question;
+      if (question) {
+        // Busy → prefill so nothing races the in-flight run; idle → send now.
+        if (status === "submitted" || status === "streaming") setInput(question);
+        else void sendMessage({ text: question });
+      }
       setTimeout(() => inputRef.current?.focus(), 300);
     };
     window.addEventListener("ph-open-dock", onOpen);
     return () => window.removeEventListener("ph-open-dock", onOpen);
-  }, []);
+  }, [status, sendMessage]);
 
   const ask = (text: string) => {
     const q = text.trim();
